@@ -1,15 +1,14 @@
 import { badQuery, invalidTarget } from "./errors";
+import { isRecord } from "./guards";
 import type { DeliveryError, Query, Target } from "./types";
 
-const MAX_LIST = 50;
+const MAX_LIST_VALUES = 50;
+const MIN_LIMIT = 1;
+const MAX_LIMIT = 50;
 const MAX_CURSOR = 512;
 const TAG = /^[a-z0-9_:-]{1,64}$/;
 
 export type Built = { url: string } | { error: DeliveryError };
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 function nonEmptyText(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
@@ -31,7 +30,7 @@ function checkList(
 ): { value?: string } | { error: DeliveryError } {
   if (values === undefined) return {};
   const problem = { error: badQuery({ fields: [param] }) };
-  if (!Array.isArray(values) || values.length > MAX_LIST) return problem;
+  if (!Array.isArray(values) || values.length > MAX_LIST_VALUES) return problem;
   for (const v of values) {
     if (typeof v !== "string" || !accept(v)) return problem;
   }
@@ -40,7 +39,7 @@ function checkList(
 
 /** Checks the target and query and builds the request address, or says what is wrong. */
 export function buildRequestUrl(target: Target, query?: Query): Built {
-  if (!isObject(target)) return { error: invalidTarget("target") };
+  if (!isRecord(target)) return { error: invalidTarget("target") };
 
   let base: URL;
   try {
@@ -50,15 +49,17 @@ export function buildRequestUrl(target: Target, query?: Query): Built {
     return { error: invalidTarget("baseUrl") };
   }
   if (base.protocol !== "http:" && base.protocol !== "https:") return { error: invalidTarget("baseUrl") };
+  // A query or fragment would be dropped silently; say so instead.
+  if (base.search !== "" || base.hash !== "") return { error: invalidTarget("baseUrl") };
   if (!usableId(target.platformId)) return { error: invalidTarget("platformId") };
   if (!usableId(target.placementId)) return { error: invalidTarget("placementId") };
 
-  if (query !== undefined && !isObject(query)) return { error: badQuery() };
+  if (query !== undefined && !isRecord(query)) return { error: badQuery() };
   const q: Query = query ?? {};
   const params = new URLSearchParams();
 
   if (q.limit !== undefined) {
-    if (typeof q.limit !== "number" || !Number.isInteger(q.limit) || q.limit < 1 || q.limit > 50) {
+    if (typeof q.limit !== "number" || !Number.isInteger(q.limit) || q.limit < MIN_LIMIT || q.limit > MAX_LIMIT) {
       return { error: badQuery({ fields: ["limit"] }) };
     }
     params.set("limit", String(q.limit));

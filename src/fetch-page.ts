@@ -1,13 +1,10 @@
 import { contractMismatch, fail, network, originNotAllowed, badQuery, succeed, unavailable, unknownPlacement } from "./errors";
+import { isRecord } from "./guards";
 import { buildRequestUrl } from "./request";
 import { parsePage } from "./validate";
 import type { DeliveryError, Options, Query, Result, Target } from "./types";
 
 const MAX_SERVICE_MESSAGE = 500;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /** What the service said about an error, read leniently: nothing here decides the error kind. */
 function readServiceError(text: string): { message?: string; fields?: string[] } {

@@ -1,14 +1,9 @@
+import { isRecord } from "./guards";
 import type { Image, Item, Page } from "./types";
 
 export type Parsed = { page: Page } | { problem: string };
 
 const WEB_ADDRESS = /^https?:\/\/\S+$/i;
-
-type Fields = Record<string, unknown>;
-
-function isRecord(value: unknown): value is Fields {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === "string");

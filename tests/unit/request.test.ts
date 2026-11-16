@@ -108,7 +108,7 @@ describe("buildRequestUrl: refusals", () => {
     expect(error(t, "limit=5").kind).toBe("bad_query");
   });
 
-  it.each([[""], ["not a url"], ["ftp://x.example.com"], ["javascript:alert(1)"], [undefined], [5]])(
+  it.each([[""], ["not a url"], ["ftp://x.example.com"], ["javascript:alert(1)"], ["https://gw.example.com/x?key=abc"], ["https://gw.example.com/x#top"], [undefined], [5]])(
     "refuses baseUrl %p",
     (baseUrl) => {
       const e = error({ ...t, baseUrl });
@@ -120,6 +120,11 @@ describe("buildRequestUrl: refusals", () => {
   it.each([[""], [undefined], [5], ["."], [".."]])("refuses id %p", (id) => {
     expect(error({ ...t, platformId: id }).fields).toEqual(["platformId"]);
     expect(error({ ...t, placementId: id }).fields).toEqual(["placementId"]);
+  });
+
+  it("refuses a target or query that is an array", () => {
+    expect(error([]).kind).toBe("invalid_target");
+    expect(error(t, []).kind).toBe("bad_query");
   });
 
   it("refuses a target that is not an object", () => {

@@ -80,6 +80,12 @@ Decisions, alternatives and reversals for this feature. D1 to D4 were put to the
 - Build output: the plan had `dist/types` copied to one `dist/index.d.ts`; that would break its imports, so `tsc` now emits declarations straight into `dist/` (`index.d.ts` plus the files it imports).
 - Ids `.` and `..` are refused as `invalid_target`: the URL parser folds them into the path even when percent-encoded.
 
+## Review of PR 1 (2026-11-16)
+
+Applied: `--passWithNoTests` removed; a `baseUrl` with a query or fragment is `invalid_target` instead of being dropped silently; `limit` bounds and list-size limit have separate constants; one shared `isRecord` in `src/guards.ts` (arrays are not records).
+
+Left as is, on purpose: one bad image or link fails the whole page (spec FR-012, D12); a 2xx other than 200 is `unavailable` (spec Assumptions); `aborted` is read from the signal after a failure, so a real network error followed closely by the caller's timeout reports as cancelled (rare, still a `network` error); an error body is read in full before the 500-character cut; the IIFE bundle is not in `exports` while the package is private.
+
 ## Verification (2026-11-16)
 
 - `npm run lint`, `npm run typecheck`, `npm test` pass in both Jest projects (node, jsdom): 19 suites, 318 tests.
