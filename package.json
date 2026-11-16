@@ -1,6 +1,6 @@
 {
   "name": "content-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Headless browser SDK for content-api: fetches content from the public delivery endpoint and returns plain data.",
   "main": "dist/index.cjs",
@@ -11,13 +11,15 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
-    }
+    },
+    "./browser": "./dist/content-sdk.js"
   },
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "prepare": "npm run build",
     "test": "jest",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
@@ -36,5 +38,9 @@
     "ts-jest": "^29.4.12",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.70.0"
-  }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

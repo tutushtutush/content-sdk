@@ -42,17 +42,9 @@ Expected: platform `listings`, placement `latest` returns `{ ok: true }` with a 
 
 ## 4. Browser check from the allowed origin (manual)
 
-The allowed origin for the test platform is `https://listings-test-nine.vercel.app`. A browser sends `Origin` automatically, so this can only be checked from a page served from that origin (the owner decides how; nothing in listings is changed by this feature). With the IIFE bundle loaded on such a page, in the console:
+The allowed origin for the test platform is `https://listings-test-nine.vercel.app`. A browser sends `Origin` automatically, so this can only be checked from a page served from that origin (the owner decides how; nothing in listings is changed by this feature). Since spec 002 the browser file is the script-tag loader, not a `ContentSdk` global: use the page in [../002-browser-loader/quickstart.md](../002-browser-loader/quickstart.md) step 5.
 
-```js
-const r = await ContentSdk.fetchPage(
-  { baseUrl: "https://content-api-test.onrender.com", platformId: "listings", placementId: "latest" },
-  { limit: 5 },
-);
-console.log(r.ok, r.ok ? r.page.items.length : r.error.kind);
-```
-
-Expected: `true` and a number up to 5. From any other origin: `false` with `network` (a browser hides the 403 body) or `origin_not_allowed`.
+Expected: `{ ok: true, page }` with at most the limit asked for. From any other origin: `{ ok: false }` with `network` (a browser hides the 403 body) or `origin_not_allowed`.
 
 ## 5. Walk all pages
 

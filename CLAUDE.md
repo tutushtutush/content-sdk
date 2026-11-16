@@ -6,7 +6,7 @@ no DOM, no runtime dependencies. Events and ranking come later, when content-api
 Read first: `.specify/memory/constitution.md`, then the current feature in `specs/`. Every change goes through the spec-kit lifecycle (`/speckit-specify` → `/speckit-plan` → `/speckit-tasks` →
 `/speckit-analyze` → `/speckit-implement` → `/speckit-converge`).
 
-**Status**: created 2026-11-16, local only, no remote yet. First feature: the delivery client (fetch items, page by cursor, typed errors).
+**Status**: created 2026-11-16; remote `github.com/tutushtutush/content-sdk` (private). Feature 001, the delivery client (fetch items, page by cursor, typed errors), is merged. Feature 002, the browser bundle and script-tag loader, is in progress.
 
 ## Working agreement
 

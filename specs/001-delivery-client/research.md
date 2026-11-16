@@ -80,6 +80,8 @@ Decisions, alternatives and reversals for this feature. D1 to D4 were put to the
 - Build output: the plan had `dist/types` copied to one `dist/index.d.ts`; that would break its imports, so `tsc` now emits declarations straight into `dist/` (`index.d.ts` plus the files it imports).
 - Ids `.` and `..` are refused as `invalid_target`: the URL parser folds them into the path even when percent-encoded.
 
+- Spec 002 replaced the `ContentSdk` browser global with the `contentSdk` loader (002 research D2); quickstart step 4 now points at the 002 page.
+
 ## Review of PR 1 (2026-11-16)
 
 Applied: `--passWithNoTests` removed; a `baseUrl` with a query or fragment is `invalid_target` instead of being dropped silently; `limit` bounds and list-size limit have separate constants; one shared `isRecord` in `src/guards.ts` (arrays are not records).
