@@ -1,15 +1,22 @@
 import * as esbuild from "esbuild";
 import { execFileSync } from "node:child_process";
+import { rmSync } from "node:fs";
 
-const common = { entryPoints: ["src/index.ts"], bundle: true, target: "es2020", sourcemap: true };
+// Start clean so a file that is no longer built cannot linger in the package.
+rmSync("dist", { recursive: true, force: true });
 
-await esbuild.build({ ...common, outfile: "dist/index.mjs", format: "esm" });
-await esbuild.build({ ...common, outfile: "dist/index.cjs", format: "cjs" });
+const common = { bundle: true, target: "es2020", sourcemap: true };
+
+// The library: import and require entries.
+await esbuild.build({ ...common, entryPoints: ["src/index.ts"], outfile: "dist/index.mjs", format: "esm" });
+await esbuild.build({ ...common, entryPoints: ["src/index.ts"], outfile: "dist/index.cjs", format: "cjs" });
+
+// The browser file: the loader only. It creates the `contentSdk` global and nothing else.
 await esbuild.build({
   ...common,
+  entryPoints: ["src/browser.ts"],
   outfile: "dist/content-sdk.js",
   format: "iife",
-  globalName: "ContentSdk",
   minify: true,
 });
 

@@ -1,7 +1,24 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 import { fetchPage } from "../../src/fetch-page";
 import { examplePage, fakeFetch, target } from "../contract/fixtures/delivery-v1";
+
+const src = join(__dirname, "../../src");
+
+function files(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    return statSync(path).isDirectory() ? files(path) : path.endsWith(".ts") ? [path] : [];
+  });
+}
+
+const code = (path: string) =>
+  readFileSync(path, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+// The loader is the only code that reads the page: its own script tag and two attributes.
+const isLoader = (path: string) => relative(src, path).startsWith("loader") || relative(src, path) === "browser.ts";
+
+const has = (text: string, word: string) => new RegExp(`\\b${word}\\b`).test(text);
 
 describe("headless", () => {
   it("runs with no window, document or location", async () => {
@@ -11,12 +28,28 @@ describe("headless", () => {
     expect((await fetchPage(target, undefined, { fetch: fn })).ok).toBe(true);
   });
 
-  it("the source never names the DOM or evaluates text", () => {
-    const dir = join(__dirname, "../../src");
-    for (const file of readdirSync(dir).filter((f) => f.endsWith(".ts"))) {
-      const code = readFileSync(join(dir, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  it("the delivery client never names the DOM or evaluates text", () => {
+    const core = files(src).filter((f) => !isLoader(f));
+    expect(core.length).toBeGreaterThan(5);
+    for (const file of core) {
       for (const word of ["document", "window", "innerHTML", "eval", "Function"]) {
-        expect({ file, word, found: new RegExp(`\\b${word}\\b`).test(code) }).toEqual({ file, word, found: false });
+        expect({ file: relative(src, file), word, found: has(code(file), word) }).toEqual({ file: relative(src, file), word, found: false });
+      }
+    }
+  });
+
+  it("the loader creates nothing on the page and stores nothing", () => {
+    const loader = files(src).filter(isLoader);
+    expect(loader.length).toBeGreaterThanOrEqual(6);
+    for (const file of loader) {
+      const text = code(file);
+      for (const word of ["createElement", "innerHTML", "appendChild", "insertAdjacent", "cookie", "localStorage", "sessionStorage", "eval", "Function", "XMLHttpRequest", "sendBeacon"]) {
+        expect({ file: relative(src, file), word, found: has(text, word) }).toEqual({ file: relative(src, file), word, found: false });
+      }
+      expect({ file: relative(src, file), found: text.includes("document.write") }).toEqual({ file: relative(src, file), found: false });
+      // document is read only for the running script
+      for (const m of text.matchAll(/\bdocument\b[^\n]*/g)) {
+        expect(m[0]).toMatch(/currentScript|document\?:/);
       }
     }
   });
