@@ -27,15 +27,17 @@ export function install(env: Env): void {
 function start(env: Env): void {
   // document.currentScript names the running script only during this first synchronous run.
   const script = env.document?.currentScript;
+
+  // A second load is named as such, whatever its attributes are.
+  if (isObject(env.contentSdk) && typeof env.contentSdk.fetchPage === "function") {
+    warn(env, "[content-sdk] The script was loaded twice; the second load was ignored.");
+    return;
+  }
+
   const read = readSettings(script);
   if ("missing" in read) {
     // Nothing is created, replayed or changed on the page.
     warn(env, `[content-sdk] Missing ${read.missing.join(" and ")} on the content-sdk <script> tag. Nothing will be fetched.`);
-    return;
-  }
-
-  if (isObject(env.contentSdk) && typeof env.contentSdk.fetchPage === "function") {
-    warn(env, "[content-sdk] The script was loaded twice; the second load was ignored.");
     return;
   }
 
@@ -44,7 +46,6 @@ function start(env: Env): void {
   const queue = sdk.q;
 
   const method = makeFetchPage(read.settings, { fetchPage, env });
-  sdk.fetchPage = method;
   const run = makeRunner({ fetchPage: method }, env);
 
   // Replay in order; an index loop also picks up entries pushed while it runs.
@@ -56,4 +57,8 @@ function start(env: Env): void {
     for (const entry of entries) run(entry);
     return queue.length;
   };
+
+  // Last, so a start that fails above (a frozen queue, say) leaves no method behind
+  // and the page is not taken for "already loaded".
+  sdk.fetchPage = method;
 }

@@ -293,3 +293,26 @@ describe("install: last guards", () => {
     expect(warnings).toEqual(["[content-sdk] The loader failed to start: blocked"]);
   });
 });
+
+describe("install: review fixes", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it("a second load without attributes is still named as a second load", () => {
+    stubDelivery();
+    const stub = { q: [] as unknown[] };
+    install(fakeEnv(GOOD, stub).env);
+    const second = fakeEnv({}, stub);
+    install(second.env);
+    expect(second.warnings).toEqual(["[content-sdk] The script was loaded twice; the second load was ignored."]);
+  });
+
+  it("a frozen queue is one 'failed to start' warning and leaves no fetchPage behind", () => {
+    stubDelivery();
+    const stub = { q: Object.freeze([]) as unknown as unknown[] };
+    const { env, warnings } = fakeEnv(GOOD, stub);
+    expect(() => install(env)).not.toThrow();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("[content-sdk] The loader failed to start:");
+    expect((stub as { fetchPage?: unknown }).fetchPage).toBeUndefined();
+  });
+});

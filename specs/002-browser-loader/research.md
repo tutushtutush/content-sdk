@@ -66,9 +66,15 @@ Decisions, alternatives and reversals. D1 and D2 were put to the owner as option
 
 - `q.push` after load: the plan said it returns "the new length"; because the queue is emptied after replay and a push is run, not kept, it returns 0 (a number, as `Array.push` does). The contract only promises that the command runs.
 
+## Review of PR 2 (2026-11-16)
+
+Applied: the double-load check now comes before the attributes are read (a second copy without attributes is named as a second load); `contentSdk.fetchPage` is assigned last, so a start that fails (a frozen queue, say) leaves no method behind and the page is not taken for "already loaded".
+
+Left as is, on purpose: queue entries must be arrays (`[name, ...args]`; array-likes such as `arguments` objects are outside the contract); a non-array `q` is replaced silently; the placement id is validated by the 001 client (`invalid_target`), not again by the loader; `prepare` needs the dev dependencies, as `ad-serve-client`'s does, so `npm ci --omit=dev` in this repository fails while a git install works; `content-sdk/browser` has no types because the file exports nothing; the test run builds `dist/` first because the browser and package tests need it.
+
 ## Verification (2026-11-16)
 
-- `npm run lint`, `npm run typecheck`, `npm test`: 34 suites, 517 tests pass in both Jest projects (node, jsdom); the jsdom `tests/browser` test loads the real built `dist/content-sdk.js`.
+- `npm run lint`, `npm run typecheck`, `npm test`: 34 suites, 527 tests pass in both Jest projects (node, jsdom); the jsdom `tests/browser` test loads the real built `dist/content-sdk.js`.
 - Quickstart step 2: the built file adds no global but `contentSdk` (and none at all when the attributes are bad). Step 3: `require.resolve("content-sdk/browser")` gives `dist/content-sdk.js`; `require` and `import` of the bare name give `fetchPage`.
 - Install from a repository (step 4): a scratch git repository holding the tracked sources (no `dist/`) tagged and installed with `npm install git+file://…#tag`; `prepare` ran, `dist/` holds the built files including `content-sdk.js` and its map, the path resolves, and the library `require` and `import` work. `npm pack --dry-run` lists `dist/content-sdk.js` and `.map`. The real repository was not committed for this test.
 - **For content-api's side**: npm printed an `allow-scripts` notice that the package's `prepare` script is "not yet covered by allowScripts". The script still ran here, but a consumer that enforces that policy must allow `content-sdk`'s `prepare`, or the git install gives no `dist/`.
