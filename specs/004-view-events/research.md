@@ -79,6 +79,12 @@ Decisions, the alternatives considered, and what was rejected, with the reason. 
 
 - A tag attribute for the actor reference; a generic `reportEvent` for other kinds; retries or an outbox; remembering the placement from a fetch; deduplicating views or clicks; any rendering or listener on the page. Each can be added when a requirement shows up.
 
+## R14b. Known limits, found in review of PR 4 and documented in the README
+
+- **Tall elements.** Half of the element's own area cannot be visible when the element is more than about twice the viewport's height, so such an element never reports a view. This is a limit of the rule the owner chose (the IAB rule `ad-serve-client` uses; the IAB's own answer for large ads is a lower share, which would be a new decision made only if a platform has tall cards).
+- **One watch per call.** A re-render that calls `watchView` again reports again, and a card first seen later than two minutes after its watch began reports nothing. Both are the specified behavior (no deduplication, a fixed give-up); the README tells platforms to call it once per card, to keep and call `stop`, and in a long feed to call it when a card is about to scroll into view.
+- **Checked and left alone**: `actor_ref` is counted in code points on both sides (the service counts the same way, in its rules and in its database check); a fetch that throws is a lost event, never an error in the page; the beacon and the fallback `fetch` differ on credentials (R7); a page with no `setTimeout` still flushes at 50 events or when the page is hidden; one reporter per distinct target means one set of page-hidden listeners per target (a page uses one).
+
 ## R15. Approaches started and reversed during the build, and corrections
 
 No design decision was reversed. What changed on the way, with the reason:

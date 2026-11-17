@@ -127,3 +127,9 @@ MVP is Phases 1 to 4: a platform can report views and clicks through the reporte
 
 - [X] T026 Update the "Source Code" tree and the Design section of `specs/004-view-events/plan.md` to match what was built: `src/events/page-env.ts` (the one module that reads the page's globals, with its test), `src/events/library.ts` (the library form with one reporter per target; `src/index.ts` only exports from it), and `tests/unit/events/page-env.test.ts` and `library.test.ts`, per plan: structure (unrequested)
 - [X] T027 GATED (owner's decision, 2026-11-17: option 1, read as 5 KiB; the spec now says so and the code stays): settle SC-005's reading, since the built file grew by 5,066 bytes. Either say "5 KiB (5,120 bytes)" in the spec and keep the code, or shorten the console warnings in `src/events/` to bring the growth under 5,000 bytes and re-measure in `research.md` R16, per SC-005 (partial)
+
+---
+
+## Phase 10: Review of PR 4
+
+- [X] T028 Document in `README.md` and `research.md` (R14b) the limits found in review: use `watchView` once per card and keep and call `stop` (each call is its own watch, no deduplication), call it when a card is about to scroll into view in a long feed (the two-minute give-up), and a card taller than about twice the viewport can never count as seen (half of its own area); the other review findings were checked and left as designed, with the reasons in R14b (partial)
