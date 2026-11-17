@@ -34,7 +34,7 @@ window.contentSdk.q.push(["fetchPage", "latest", { limit: 5 }, (result) => show(
 const result = await window.contentSdk.fetchPage("latest", { limit: 5, tags: ["cars"] });
 ```
 
-The query is the one `fetchPage` takes (`limit`, `tags`, `languages`, `cursor`); pass `page.nextCursor` back as `cursor` for the next page. Nothing here throws into your page: a bad call is a typed error in the result, a bad queue entry or a throwing callback is one console warning. All text in the result is untrusted; set it through your framework's escaping.
+The query is the one `fetchPage` takes (`limit`, `tags`, `languages`, `q`, `cursor`); pass `page.nextCursor` back as `cursor` for the next page. Nothing here throws into your page: a bad call is a typed error in the result, a bad queue entry or a throwing callback is one console warning. All text in the result is untrusted; set it through your framework's escaping.
 
 The script only reads its own tag. It creates no element, injects no style, and sets no cookie or storage. Full contract: [specs/002-browser-loader/contracts/loader.md](specs/002-browser-loader/contracts/loader.md).
 
@@ -60,6 +60,18 @@ for (;;) {
 }
 ```
 
+### Search
+
+Add `q`, the words a visitor typed, to search the placement's items:
+
+```ts
+const result = await fetchPage(target, { q: "toyota corolla", limit: 10 });
+// the next page of the same search: the same q with the cursor
+const next = await fetchPage(target, { q: "toyota corolla", limit: 10, cursor: page.nextCursor });
+```
+
+`q` is text of at most 100 characters after trimming (characters, not bytes). Empty or only spaces means no search, so an empty search box needs no special case. It is sent as typed. The service decides what matches and in what order (every word must match a word or the start of one, case is ignored, best match first), so the SDK only passes it on and returns the items as they come. A cursor belongs to the search it came from: pass the same `q` with it, or the service refuses it. A `q` that is not text or is too long is a `bad_query` error naming `q`, without a request; a text with no word in it is refused by the service the same way. The script tag takes the same option: `window.contentSdk.fetchPage("latest", { q: "toyota" })`, or queued.
+
 `fetchPage` never throws or rejects. Every outcome is `{ ok: true, page }` or `{ ok: false, error }`. All text in an item (title, description, tags, addresses) is untrusted: set it through your framework's escaping, never build HTML from it.
 
 ## Errors
@@ -68,7 +80,7 @@ for (;;) {
 |---|---|
 | `unknown_placement` | 404: the platform or placement does not exist or is switched off |
 | `origin_not_allowed` | 403: the page's origin is not allowed for the platform |
-| `bad_query` | 422, or the SDK refused limit, tags, languages or cursor before sending; `fields` names them |
+| `bad_query` | 422, or the SDK refused limit, tags, languages, q or cursor before sending; `fields` names them |
 | `unavailable` | any other status (500, 503, ...) |
 | `network` | the request failed or was cancelled (`aborted: true` when your signal cancelled it) |
 | `contract_mismatch` | a 200 answer that does not match the contract |

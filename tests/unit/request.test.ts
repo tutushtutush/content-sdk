@@ -132,3 +132,79 @@ describe("buildRequestUrl: refusals", () => {
     expect(error(null).kind).toBe("invalid_target");
   });
 });
+
+describe("buildRequestUrl: q (search)", () => {
+  const sent = (q: unknown) => url(t, { q }).searchParams;
+  const refused = (q: unknown) => {
+    const r = buildRequestUrl(t, { q } as never);
+    return "error" in r ? r.error : undefined;
+  };
+
+  it.each([[undefined], [""], ["   "], ["\t\n "], ["   "]])("sends no q for %p", (q) => {
+    expect(url(t, { q }).search).toBe("");
+  });
+
+  it("sends the text as q", () => {
+    expect(url(t, { q: "toyota corolla" }).search).toBe("?q=toyota+corolla");
+  });
+
+  it("sends the text unchanged, spaces at its ends included", () => {
+    expect(sent(" a b ").get("q")).toBe(" a b ");
+  });
+
+  it("sends Amharic text and Ethiopic punctuation unchanged", () => {
+    expect(sent("መኪና ፡ ቶዮታ።").get("q")).toBe("መኪና ፡ ቶዮታ።");
+  });
+
+  it.each(["&", "=", "#", "+", "%", "?", "/", "\\", "'", '"', "<", ">", "a&limit=50", "x=1&tag=cars", "a#b", "line\nbreak", "100%", "a+b"])(
+    "keeps %p inside q: it adds and changes no other parameter",
+    (text) => {
+      const u = url(t, { q: text });
+      expect([...u.searchParams.keys()]).toEqual(["q"]);
+      expect(u.searchParams.get("q")).toBe(text);
+      expect(u.hash).toBe("");
+      expect(u.pathname).toBe("/api/v1/delivery/listings/latest");
+    },
+  );
+
+  it("sends q with limit, tags, languages and cursor, each in its own form", () => {
+    const u = url(t, { q: "bike", limit: 5, tags: ["cars", "x"], languages: ["am"], cursor: "c1" });
+    expect(Object.fromEntries(u.searchParams)).toEqual({ q: "bike", limit: "5", tag: "cars,x", language: "am", cursor: "c1" });
+  });
+
+  it("leaves limit, tag, language and cursor out when only q is given", () => {
+    expect([...url(t, { q: "bike" }).searchParams.keys()]).toEqual(["q"]);
+  });
+
+  it("allows 100 characters, with or without spaces around them", () => {
+    expect(sent("a".repeat(100)).get("q")).toBe("a".repeat(100));
+    expect(sent(`  ${"a".repeat(100)}  `).get("q")).toBe(`  ${"a".repeat(100)}  `);
+    expect(refused("a".repeat(100))).toBeUndefined();
+  });
+
+  it("refuses 101 characters with bad_query naming q", () => {
+    expect(refused("a".repeat(101))).toMatchObject({ kind: "bad_query", fields: ["q"] });
+    expect(refused(`  ${"a".repeat(101)}  `)).toMatchObject({ kind: "bad_query", fields: ["q"] });
+  });
+
+  it("counts characters, not bytes or UTF-16 units", () => {
+    expect(refused("አ".repeat(100))).toBeUndefined();
+    expect(refused("አ".repeat(101))).toMatchObject({ kind: "bad_query", fields: ["q"] });
+    expect(refused("😀".repeat(100))).toBeUndefined();
+    expect(refused("😀".repeat(101))).toMatchObject({ kind: "bad_query", fields: ["q"] });
+  });
+
+  it.each([[5], [{}], [["a"]], [null], [true], [() => "a"]])("refuses %p with bad_query naming q", (q) => {
+    expect(refused(q)).toMatchObject({ kind: "bad_query", fields: ["q"] });
+  });
+
+  it("does not throw for a lone surrogate and sends it", () => {
+    expect(() => url(t, { q: "\uD800" })).not.toThrow();
+    expect(url(t, { q: "\uD800" }).searchParams.has("q")).toBe(true);
+  });
+
+  it("reports q together with another bad field as the first problem found, never a throw", () => {
+    const r = buildRequestUrl(t, { q: 5, limit: 0 } as never);
+    expect("error" in r && r.error.kind).toBe("bad_query");
+  });
+});

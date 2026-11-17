@@ -35,6 +35,12 @@ const cases: Array<[string, () => Promise<unknown>]> = [
   ["query is a string", () => fetchPage(target, "limit=1" as never)],
   ["query limit wrong type", () => fetchPage(target, { limit: "5" as never })],
   ["query tags wrong type", () => fetchPage(target, { tags: 5 as never })],
+  ["query q is a number", () => fetchPage(target, { q: 5 as never })],
+  ["query q is an object", () => fetchPage(target, { q: {} as never })],
+  ["query q is a list", () => fetchPage(target, { q: ["a"] as never })],
+  ["query q is null", () => fetchPage(target, { q: null as never })],
+  ["query q is 101 characters", () => fetchPage(target, { q: "x".repeat(101) })],
+  ["query q is a lone surrogate", () => fetchPage(target, { q: "\uD800" })],
   ["options is a string", () => fetchPage(target, undefined, "x" as never)],
   ["fetch option is not a function", () => fetchPage(target, undefined, { fetch: 5 as never })],
 ];

@@ -24,6 +24,16 @@ describe("hosted test service", () => {
     expect(result).toMatchObject({ ok: false, error: { kind: "unknown_placement" } });
   });
 
+  it("returns an empty page for a search no item matches", async () => {
+    const result = await fetchPage({ baseUrl, ...ids }, { q: "zzqxjvnothingmatchesthis" });
+    expect(result).toEqual({ ok: true, page: { items: [], nextCursor: null } });
+  });
+
+  it("names q when the service refuses a text with no word in it", async () => {
+    const result = await fetchPage({ baseUrl, ...ids }, { q: "&|!" });
+    expect(result).toMatchObject({ ok: false, error: { kind: "bad_query", fields: ["q"] } });
+  });
+
   it("refuses limit 51 without sending", async () => {
     const result = await fetchPage({ baseUrl, ...ids }, { limit: 51 });
     expect(result).toMatchObject({ ok: false, error: { kind: "bad_query", fields: ["limit"] } });
