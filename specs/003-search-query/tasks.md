@@ -90,3 +90,9 @@ Markers: `[ ]` open, `[X]` done. **[P]** can run in parallel (different files, n
 ## Implementation strategy
 
 MVP is Phases 1 to 3: the SDK sends `q`. Phases 4 to 6 prove paging, the script tag and bad input; Phase 7 documents and versions it. One pull request, built and shown, and nothing pushed until the owner says so.
+
+---
+
+## Phase 8: Convergence
+
+- [X] T021 Fix the stale wording in `specs/003-search-query/quickstart.md` line 15: the second live case is a symbols-only text that the service refuses, giving `bad_query` naming `q` (as written in `tests/live/live.test.ts`), not "a `limit`-free search that must come back `ok`", per SC-005 and T014 (partial)
