@@ -80,10 +80,12 @@ export interface ReportTarget {
   platformId: string;
 }
 
-/** Optional facts about one reported view or click. Both are sent as given when they are valid. */
+/** Optional facts about one reported view or click. Each is sent as given when it is valid. */
 export interface ViewOptions {
   /** The placement the item was read through: 3 to 40 characters of a-z, 0-9 and -. */
   placementId?: string;
   /** Opaque text naming who or what saw it, 1 to 128 characters. The SDK makes none and stores none. */
   actorRef?: string;
+  /** The visit the event belongs to, chosen by the platform: 1 to 128 characters of text with no NUL. The SDK makes none and stores none. */
+  sessionId?: string;
 }

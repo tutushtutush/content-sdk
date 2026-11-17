@@ -92,11 +92,11 @@ The SDK tells content-api what visitors do with the items you show, so the servi
 
 ```js
 // after rendering an item into `element` (a framework ref callback, say)
-const stop = window.contentSdk.watchView(element, item, { placementId: "latest", actorRef: "device-abc" });
+const stop = window.contentSdk.watchView(element, item, { placementId: "latest", actorRef: "device-abc", sessionId: "s-7f3a91c2" });
 stop(); // optional: cancel if the card is taken away before it was seen
 
 // in your own click handler, when the visitor follows the item's link out
-window.contentSdk.trackLinkClick(item, { placementId: "latest", actorRef: "device-abc" });
+window.contentSdk.trackLinkClick(item, { placementId: "latest", actorRef: "device-abc", sessionId: "s-7f3a91c2" });
 
 // before the script has loaded, push onto the queue as for fetchPage (a queued watchView cannot hand back a stop)
 window.contentSdk.q.push(["watchView", element, item, { placementId: "latest" }]);
@@ -109,9 +109,9 @@ As a library the same two functions take the target first: `watchView({ baseUrl,
 - **Use it once per card.** Each `watchView` call is its own watch and the SDK does not deduplicate, so a framework that calls your ref callback on every re-render would report the same view more than once: call it once when the card is created, keep the `stop` function, and call `stop` when the card is removed. A watch gives up two minutes after it began, so in a long feed call `watchView` when a card is about to scroll into view, not when the whole list is rendered, or a card first seen later than that reports nothing.
 - **A card taller than about twice the viewport can never count as seen**, because the rule is half of the element's own area (an element that size can fill the whole screen and still be under 50%). Keep that in mind for tall cards on small screens; a size-aware rule would be a later decision.
 - `item` is what `fetchPage` returned; only `item.id` is read, and it must be a UUID (any other id is one console warning and no event).
-- `placementId` (the placement you read the item through; 3 to 40 characters of `a-z`, `0-9`, `-`) and `actorRef` (opaque text of 1 to 128 characters, for example a device or session id you already have) are optional and sent as given. A value the service would refuse is left out with one console warning. The SDK makes no id of its own and writes no cookie and no storage.
+- `placementId` (the placement you read the item through; 3 to 40 characters of `a-z`, `0-9`, `-`), `actorRef` (opaque text of 1 to 128 characters naming the user or device) and `sessionId` (opaque text of 1 to 128 characters naming the visit the event belongs to) are optional and sent as given. A value the service would refuse is left out with one console warning, and the event is still reported. **You supply the session id, on each call:** the SDK makes no id of its own, keeps nothing between calls and writes no cookie and no storage, so a call with no `sessionId` sends none. `actorRef` and `sessionId` are independent. Send random or hashed values for both, never an email, a name or anything that identifies a person: the service cannot tell the difference and keeps what it is sent. content-api stores the session id (its spec 017) so that counting can later tell separate visits apart.
 - Events wait about two seconds after the first one, then leave together; 50 waiting events leave at once; and everything waiting leaves when the page is hidden or being left. A request holds at most 50 events and nothing is sent when nothing waits. They go as one `text/plain` beacon to `/api/v1/events` (so no pre-flight), with one keep-alive `fetch` if the browser refuses the beacon. A failed send is not retried: these events are best effort and not for billing.
-- Nothing throws into your page; a bad call is one console warning. Full contract: [specs/004-view-events/contracts/events-api.md](specs/004-view-events/contracts/events-api.md).
+- Nothing throws into your page; a bad call is one console warning. Full contract: [specs/004-view-events/contracts/events-api.md](specs/004-view-events/contracts/events-api.md), with `sessionId` in [specs/005-session-id/contracts/events-api-delta.md](specs/005-session-id/contracts/events-api-delta.md).
 
 ## Build and test
 

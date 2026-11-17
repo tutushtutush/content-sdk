@@ -113,3 +113,102 @@ describe("eventFor", () => {
     });
   });
 });
+
+describe("eventFor: the session id (spec 005)", () => {
+  const sessionOf = (sessionId: unknown, kind: "view" | "link_click" = "view") => eventFor(kind, item, { sessionId }, NOW);
+
+  it.each(["view", "link_click"] as const)("sends a valid sessionId as session_id on a %s, with no warning", (kind) => {
+    const built = sessionOf("s-7f3a", kind);
+    expect(built.event).toEqual({ kind, item_id: ID, occurred_at: "2026-11-17T08:00:00.123Z", session_id: "s-7f3a" });
+    expect(built.warnings).toEqual([]);
+  });
+
+  it.each([
+    ["case", "S-7f3A"],
+    ["spaces", "visit 12 "],
+    ["a slash", "a/b"],
+    ["non-ASCII letters", "ጉብኝት é"],
+    ["128 characters", "x".repeat(128)],
+    ["128 emoji, counted as characters", "😀".repeat(128)],
+    ["one character", "a"],
+  ])("keeps a sessionId with %s exactly as given", (_name, value) => {
+    expect(sessionOf(value).event?.session_id).toBe(value);
+    expect(sessionOf(value).warnings).toEqual([]);
+  });
+
+  it("sits beside placement_id and actor_ref, and none affects another", () => {
+    const built = eventFor("view", item, { placementId: "latest", actorRef: "device-1", sessionId: "s-1" }, NOW);
+    expect(built.event).toMatchObject({ placement_id: "latest", actor_ref: "device-1", session_id: "s-1" });
+    expect(built.warnings).toEqual([]);
+    const bad = eventFor("view", item, { placementId: "ab", actorRef: "", sessionId: "s-1" }, NOW);
+    expect(bad.event?.session_id).toBe("s-1");
+    expect(bad.event?.placement_id).toBeUndefined();
+    expect(bad.event?.actor_ref).toBeUndefined();
+    expect(bad.warnings).toHaveLength(2);
+  });
+
+  it("sends a sessionId equal to the actorRef as given", () => {
+    expect(eventFor("view", item, { actorRef: "same", sessionId: "same" }, NOW).event).toMatchObject({ actor_ref: "same", session_id: "same" });
+  });
+
+  it.each([
+    ["empty", ""],
+    ["129 characters", "x".repeat(129)],
+    ["129 emoji", "😀".repeat(129)],
+    ["holding a NUL", "a\u0000b"],
+    ["a number", 7],
+    ["a boolean", true],
+    ["an object", { id: "a" }],
+    ["a list", ["a"]],
+    ["a function", () => "a"],
+  ])("leaves out a sessionId that is %s, with one warning, and still builds the event", (_name, bad) => {
+    const built = sessionOf(bad);
+    expect(built.event).toEqual({ kind: "view", item_id: ID, occurred_at: "2026-11-17T08:00:00.123Z" });
+    expect("session_id" in (built.event ?? {})).toBe(false);
+    expect(built.warnings).toEqual(["[content-sdk] sessionId must be 1 to 128 characters of text with no NUL; it was left out."]);
+  });
+
+  it("never puts the value given in a warning", () => {
+    const secret = "visit-secret-value-";
+    const tooLong = sessionOf(secret.repeat(10));
+    const withNul = sessionOf(`${secret}\u0000`);
+    for (const built of [tooLong, withNul]) {
+      expect(built.warnings).toHaveLength(1);
+      expect(built.warnings.join(" ")).not.toContain("secret");
+    }
+  });
+
+  it("leaves out a sessionId that cannot be read, with one warning and no throw", () => {
+    const options = {
+      get sessionId(): string {
+        throw new Error("no access");
+      },
+    };
+    const built = eventFor("view", item, options, NOW);
+    expect(built.event).toEqual({ kind: "view", item_id: ID, occurred_at: "2026-11-17T08:00:00.123Z" });
+    expect(built.warnings).toEqual(["[content-sdk] sessionId could not be read; it was left out."]);
+  });
+
+  it("reads no sessionId from options that are not an object, and keeps the one existing warning", () => {
+    const built = eventFor("view", item, "s-1", NOW);
+    expect(built.event?.session_id).toBeUndefined();
+    expect(built.warnings).toEqual(["[content-sdk] The options must be an object; they were ignored."]);
+  });
+
+  it.each([
+    ["no options", undefined],
+    ["empty options", {}],
+    ["an undefined sessionId", { sessionId: undefined }],
+    ["a null sessionId", { sessionId: null }],
+  ])("builds exactly what v0.4.0 built, with no session_id key and no warning, for %s", (_name, options) => {
+    const built = eventFor("link_click", item, options, NOW);
+    expect(built).toEqual({ event: { kind: "link_click", item_id: ID, occurred_at: "2026-11-17T08:00:00.123Z" }, warnings: [] });
+    expect("session_id" in (built.event ?? {})).toBe(false);
+    expect(JSON.stringify(built.event)).toBe(`{"kind":"link_click","item_id":"${ID}","occurred_at":"2026-11-17T08:00:00.123Z"}`);
+  });
+
+  it("still warns about actorRef: null, as v0.4.0 does", () => {
+    const built = eventFor("view", item, { actorRef: null }, NOW);
+    expect(built.warnings).toEqual(["[content-sdk] actorRef must be 1 to 128 characters of text; it was left out."]);
+  });
+});
