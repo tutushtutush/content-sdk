@@ -17,12 +17,12 @@ describe("package.json", () => {
     });
   });
 
-  it("ships dist, builds on prepare, stays private with no runtime dependencies, version 0.2.0", () => {
+  it("ships dist, builds on prepare, stays private with no runtime dependencies, version 0.3.0", () => {
     expect(pkg.files).toEqual(expect.arrayContaining(["dist"]));
     expect(pkg.scripts.prepare).toBe("npm run build");
     expect(pkg.private).toBe(true);
     expect(pkg.dependencies).toBeUndefined();
-    expect(pkg.version).toBe("0.2.0");
+    expect(pkg.version).toBe("0.3.0");
   });
 
   it("every file named by exports exists after the build", () => {

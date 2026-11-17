@@ -6,6 +6,7 @@ const MAX_LIST_VALUES = 50;
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 50;
 const MAX_CURSOR = 512;
+const MAX_SEARCH_TEXT = 100;
 const TAG = /^[a-z0-9_:-]{1,64}$/;
 
 export type Built = { url: string } | { error: DeliveryError };
@@ -35,6 +36,14 @@ function checkList(
     if (typeof v !== "string" || !accept(v)) return problem;
   }
   return values.length === 0 ? {} : { value: values.join(",") };
+}
+
+/** What a search text is checked for: text, and no more characters than the service takes. The service judges the words. */
+function checkSearch(text: unknown): { value?: string } | { error: DeliveryError } {
+  if (text === undefined) return {};
+  if (typeof text !== "string" || [...text.trim()].length > MAX_SEARCH_TEXT) return { error: badQuery({ fields: ["q"] }) };
+  // A search box left empty means no search, as an empty cursor or list does.
+  return text.trim() === "" ? {} : { value: text };
 }
 
 /** Checks the target and query and builds the request address, or says what is wrong. */
@@ -72,6 +81,10 @@ export function buildRequestUrl(target: Target, query?: Query): Built {
   const languages = checkList(q.languages, "language", (v) => v.length >= 1 && v.length <= 16 && !v.includes(","));
   if ("error" in languages) return languages;
   if (languages.value !== undefined) params.set("language", languages.value);
+
+  const words = checkSearch(q.q);
+  if ("error" in words) return words;
+  if (words.value !== undefined) params.set("q", words.value);
 
   if (q.cursor !== undefined) {
     if (typeof q.cursor !== "string" || q.cursor.length > MAX_CURSOR) return { error: badQuery({ fields: ["cursor"] }) };

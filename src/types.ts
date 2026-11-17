@@ -13,6 +13,12 @@ export interface Query {
   languages?: string[];
   /** A `nextCursor` of an earlier page of the same placement and filters; passed through unchanged. */
   cursor?: string;
+  /**
+   * Words to search for. Text of at most 100 characters after trimming (characters, not bytes); empty or
+   * only spaces means no search. The service decides matching and order, so pass the same `q` with a
+   * `cursor`: a cursor belongs to the search it came from.
+   */
+  q?: string;
 }
 
 export interface Options {

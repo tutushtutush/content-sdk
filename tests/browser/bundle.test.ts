@@ -81,6 +81,29 @@ describe("the built browser file", () => {
     expect(urls.map((u) => u.split("/delivery/")[1])).toEqual(["listings/one", "listings/two?limit=2", "listings/three"]);
   });
 
+  it("sends q for a command queued before load and for a direct call after it", async () => {
+    const { urls, fn } = fakeFetch();
+    w.fetch = fn;
+    w.contentSdk = { q: [["fetchPage", "latest", { q: "toyota corolla" }, () => {}]] };
+    loadScript(GOOD);
+    await new Promise((r) => setTimeout(r, 20));
+    await w.contentSdk?.fetchPage?.("latest", { q: "መኪና ፡ ቶዮታ", limit: 3 });
+    const searches = urls.map((u) => new URL(u).searchParams);
+    expect(searches[0].get("q")).toBe("toyota corolla");
+    expect(searches[1].get("q")).toBe("መኪና ፡ ቶዮታ");
+    expect(searches[1].get("limit")).toBe("3");
+  });
+
+  it("answers a q that is not text with a bad_query result and no request", async () => {
+    const { urls, fn } = fakeFetch();
+    w.fetch = fn;
+    w.contentSdk = { q: [] };
+    loadScript(GOOD);
+    const result = await w.contentSdk?.fetchPage?.("latest", { q: 5 });
+    expect(result).toMatchObject({ ok: false, error: { kind: "bad_query", fields: ["q"] } });
+    expect(urls).toEqual([]);
+  });
+
   it("ignores a second load of the file with one warning", async () => {
     const warnings: string[] = [];
     const realWarn = console.warn;

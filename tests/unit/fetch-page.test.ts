@@ -150,3 +150,48 @@ describe("fetchPage: inputs", () => {
     expect(JSON.stringify([t, q])).toBe(before);
   });
 });
+
+describe("fetchPage: q (search)", () => {
+  const pageOf = (...ids: string[]) => ({ items: ids.map((id) => ({ ...examplePage.items[0], id })), next_cursor: "c1" });
+
+  it("sends q in one request and returns the service's items in its order", async () => {
+    const { fn, calls } = fakeFetch(200, pageOf("b", "a", "c"));
+    const result = await fetchPage(target, { q: "toyota corolla" }, { fetch: fn });
+    expect(calls).toHaveLength(1);
+    expect(new URL(calls[0].url).searchParams.get("q")).toBe("toyota corolla");
+    if (!result.ok) throw new Error("unexpected error");
+    expect(result.page.items.map((item) => item.id)).toEqual(["b", "a", "c"]);
+    expect(result.page.nextCursor).toBe("c1");
+  });
+
+  it("answers an empty page for a search as a success", async () => {
+    const { fn } = fakeFetch(200, { items: [], next_cursor: null });
+    expect(await fetchPage(target, { q: "nothing" }, { fetch: fn })).toEqual({ ok: true, page: { items: [], nextCursor: null } });
+  });
+
+  it("requests the same address as a call with no query when q is absent, empty or spaces", async () => {
+    const plain = fakeFetch(200, examplePage);
+    await fetchPage(target, undefined, { fetch: plain.fn });
+    for (const q of [undefined, "", "   "]) {
+      const { fn, calls } = fakeFetch(200, examplePage);
+      await fetchPage(target, { q }, { fetch: fn });
+      expect(calls[0].url).toBe(plain.calls[0].url);
+    }
+  });
+
+  it("makes no request for a q it refuses", async () => {
+    const { fn, calls } = fakeFetch(200, examplePage);
+    for (const q of [5, {}, ["a"], null, "x".repeat(101)]) {
+      expect(await fetchPage(target, { q } as never, { fetch: fn })).toMatchObject({ ok: false, error: { kind: "bad_query", fields: ["q"] } });
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it("gives bad_query naming q when the service refuses the text", async () => {
+    const body = { error: { code: "invalid", message: "q must contain at least one word", details: { fields: [{ field: "q", message: "q must contain at least one word" }] } } };
+    const { fn, calls } = fakeFetch(422, body);
+    const result = await fetchPage(target, { q: "&|!" }, { fetch: fn });
+    expect(calls).toHaveLength(1);
+    expect(result).toMatchObject({ ok: false, error: { kind: "bad_query", status: 422, fields: ["q"], serviceMessage: "q must contain at least one word" } });
+  });
+});
