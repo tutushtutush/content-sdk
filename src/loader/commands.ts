@@ -1,5 +1,7 @@
 import { fetchPage as deliveryFetchPage } from "../fetch-page";
 import { network } from "../errors";
+import { pageEnv } from "../events/page-env";
+import { createReporter, type Reporter } from "../events/reporter";
 import type { Query, Result } from "../types";
 import type { Env, Settings } from "./env";
 import { clip, warn } from "./warn";
@@ -41,6 +43,23 @@ export function makeFetchPage(settings: Settings, deps: Deps): FetchPageMethod {
     deliver(callback, result, deps.env);
     return result;
   };
+}
+
+/** The reporter of the page's one platform: the tag's address and platform id over the page's own environment. */
+export function makeReporter(settings: Settings, env: Env, create: typeof createReporter = createReporter): Reporter {
+  return create({ baseUrl: settings.baseUrl, platformId: settings.platformId }, pageEnv(env));
+}
+
+export type WatchViewMethod = (element?: unknown, item?: unknown, options?: unknown) => () => void;
+export type TrackLinkClickMethod = (item?: unknown, options?: unknown) => void;
+
+/** The page-facing watchView: hands back `stop`. Through the queue the return value is simply dropped. */
+export function makeWatchView(reporter: Reporter): WatchViewMethod {
+  return (element, item, options) => reporter.watchView(element, item, options);
+}
+
+export function makeTrackLinkClick(reporter: Reporter): TrackLinkClickMethod {
+  return (item, options) => reporter.trackLinkClick(item, options);
 }
 
 export type Command = (...args: unknown[]) => unknown;

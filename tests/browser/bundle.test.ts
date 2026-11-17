@@ -12,7 +12,7 @@ interface ScriptEl {
   textContent: string | null;
 }
 interface Page {
-  document: { createElement(tag: "script"): ScriptEl; head: { appendChild(el: ScriptEl): void; innerHTML: string } };
+  document: { createElement(tag: "script"): ScriptEl; head: { appendChild(el: ScriptEl): void; innerHTML: string }; documentElement: { outerHTML: string }; cookie: string };
   contentSdk?: { q: unknown[]; fetchPage?: (placementId: string, query?: unknown, cb?: (r: unknown) => void) => Promise<unknown> };
   fetch: unknown;
 }
@@ -138,5 +138,140 @@ describe("the built browser file", () => {
     } finally {
       console.warn = realWarn;
     }
+  });
+});
+
+// Spec 004: views and link clicks, through the built file, with a fake visibility observer and a fake beacon.
+describe("the built browser file: reporting views and clicks", () => {
+  const ID = "2f8b6c1e-3b0d-4d8a-9a9e-5a4f1b7c2d10";
+  const item = { id: ID };
+
+  class FakeObserver {
+    static instances: FakeObserver[] = [];
+    constructor(private readonly callback: (entries: { isIntersecting: boolean; intersectionRatio: number }[]) => void) {
+      FakeObserver.instances.push(this);
+    }
+    observe(): void {}
+    disconnect(): void {}
+    emit(ratio: number): void {
+      this.callback([{ isIntersecting: ratio > 0, intersectionRatio: ratio }]);
+    }
+  }
+
+  interface Sdk {
+    q: unknown[];
+    watchView?: (element: unknown, item: unknown, options?: unknown) => () => void;
+    trackLinkClick?: (item: unknown, options?: unknown) => void;
+  }
+  const global = globalThis as unknown as { IntersectionObserver?: unknown; navigator: { sendBeacon?: unknown } };
+  let beacons: { url: string; body: string }[];
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    FakeObserver.instances = [];
+    beacons = [];
+    global.IntersectionObserver = FakeObserver;
+    Object.defineProperty(global.navigator, "sendBeacon", { configurable: true, value: (url: string, body: string) => (beacons.push({ url, body }), true) });
+    w.fetch = fakeFetch().fn;
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    delete global.IntersectionObserver;
+    delete global.navigator.sendBeacon;
+  });
+
+  it("offers watchView and trackLinkClick once loaded, and makes no request of its own until an event is reported", () => {
+    const { urls, fn } = fakeFetch();
+    w.fetch = fn;
+    w.contentSdk = { q: [] };
+    loadScript(GOOD);
+    const sdk = w.contentSdk as unknown as Sdk;
+    expect(typeof sdk.watchView).toBe("function");
+    expect(typeof sdk.trackLinkClick).toBe("function");
+    jest.advanceTimersByTime(60_000);
+    expect(beacons).toEqual([]);
+    expect(urls).toEqual([]);
+  });
+
+  it("reports one view, two seconds after a card has been half visible for a second, as one text/plain beacon", () => {
+    w.contentSdk = { q: [] };
+    loadScript(GOOD);
+    const sdk = w.contentSdk as unknown as Sdk;
+    const card = document.createElement("script"); // any object will do; the file must not touch it
+    sdk.watchView?.(card, item, { placementId: "latest", actorRef: "device-1" });
+    expect(FakeObserver.instances).toHaveLength(1);
+    FakeObserver.instances[0]?.emit(0.8);
+    jest.advanceTimersByTime(999);
+    jest.advanceTimersByTime(1);
+    expect(beacons).toEqual([]); // queued, waiting two seconds
+    jest.advanceTimersByTime(1999);
+    expect(beacons).toEqual([]);
+    jest.advanceTimersByTime(1);
+    expect(beacons).toHaveLength(1);
+    expect(beacons[0]?.url).toBe("https://content-api.example.com/api/v1/events");
+    expect(typeof beacons[0]?.body).toBe("string");
+    expect(JSON.parse(beacons[0]?.body ?? "")).toEqual({
+      platform_id: "listings",
+      events: [{ kind: "view", item_id: ID, occurred_at: expect.stringMatching(/Z$/), placement_id: "latest", actor_ref: "device-1" }],
+    });
+  });
+
+  it("reports a card that is never half visible as nothing, and a stopped watch as nothing", () => {
+    w.contentSdk = { q: [] };
+    loadScript(GOOD);
+    const sdk = w.contentSdk as unknown as Sdk;
+    sdk.watchView?.({}, item);
+    FakeObserver.instances[0]?.emit(0.4);
+    const stop = sdk.watchView?.({}, item);
+    FakeObserver.instances[1]?.emit(0.9);
+    jest.advanceTimersByTime(500);
+    stop?.();
+    jest.advanceTimersByTime(300_000);
+    expect(beacons).toEqual([]);
+  });
+
+  it("runs a watchView and a trackLinkClick queued before the script loaded", () => {
+    w.contentSdk = { q: [["watchView", {}, item], ["trackLinkClick", item, { placementId: "latest" }]] };
+    loadScript(GOOD);
+    expect(FakeObserver.instances).toHaveLength(1);
+    FakeObserver.instances[0]?.emit(1);
+    jest.advanceTimersByTime(1000);
+    jest.advanceTimersByTime(2000);
+    expect(beacons).toHaveLength(1);
+    expect((JSON.parse(beacons[0]?.body ?? "") as { events: { kind: string }[] }).events.map((e) => e.kind)).toEqual(["link_click", "view"]);
+  });
+
+  it("falls back to one keep-alive fetch when the beacon refuses", () => {
+    Object.defineProperty(global.navigator, "sendBeacon", { configurable: true, value: () => false });
+    const { urls, fn } = fakeFetch();
+    w.fetch = fn;
+    w.contentSdk = { q: [] };
+    loadScript(GOOD);
+    (w.contentSdk as unknown as Sdk).trackLinkClick?.(item);
+    jest.advanceTimersByTime(2000);
+    expect(urls).toEqual(["https://content-api.example.com/api/v1/events"]);
+  });
+
+  it("sets no cookie, stores nothing and changes no element of the page", () => {
+    const before = document.documentElement.outerHTML;
+    w.contentSdk = { q: [] };
+    loadScript(GOOD);
+    const html = document.documentElement.outerHTML; // with the script tag in
+    const sdk = w.contentSdk as unknown as Sdk;
+    sdk.watchView?.({}, item, { actorRef: "device-1" });
+    FakeObserver.instances[0]?.emit(0.9);
+    jest.advanceTimersByTime(1000);
+    sdk.trackLinkClick?.(item);
+    jest.advanceTimersByTime(5000);
+    expect(beacons).toHaveLength(1);
+    expect(document.cookie).toBe("");
+    expect(globalThis.localStorage.length).toBe(0);
+    expect(globalThis.sessionStorage.length).toBe(0);
+    expect(document.documentElement.outerHTML).toBe(html);
+    expect(before).not.toBe("");
+  });
+
+  it("is still one minified script with a source map", () => {
+    expect(code.trimEnd().split("\n")).toHaveLength(2);
   });
 });

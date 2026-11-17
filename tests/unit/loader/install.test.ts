@@ -2,11 +2,11 @@ import { install } from "../../../src/loader/install";
 import { fakeEnv, GOOD } from "./helpers";
 
 describe("install: success path", () => {
-  it("creates the stub when the page has none, with fetchPage and q only", () => {
+  it("creates the stub when the page has none, with the three methods and q only", () => {
     const { env, warnings } = fakeEnv(GOOD);
     install(env);
     const sdk = env.contentSdk as Record<string, unknown>;
-    expect(Object.keys(sdk).sort()).toEqual(["fetchPage", "q"]);
+    expect(Object.keys(sdk).sort()).toEqual(["fetchPage", "q", "trackLinkClick", "watchView"]);
     expect(Array.isArray(sdk.q)).toBe(true);
     expect(typeof sdk.fetchPage).toBe("function");
     expect(warnings).toEqual([]);
@@ -314,5 +314,99 @@ describe("install: review fixes", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("[content-sdk] The loader failed to start:");
     expect((stub as { fetchPage?: unknown }).fetchPage).toBeUndefined();
+  });
+});
+
+describe("install: watchView and trackLinkClick (spec 004)", () => {
+  const ID = "2f8b6c1e-3b0d-4d8a-9a9e-5a4f1b7c2d10";
+  const item = { id: ID };
+
+  // An environment that records beacons and has a clock the test can move by hand.
+  function pageWith(attrs: Record<string, string> | null, stub?: unknown) {
+    const { env, warnings } = fakeEnv(attrs, stub);
+    const beacons: { url: string; body: string }[] = [];
+    const timers: { at: number; run: () => void }[] = [];
+    env.navigator = { sendBeacon: (url, body) => (beacons.push({ url, body }), true) };
+    env.setTimeout = (run, ms) => (timers.push({ at: ms, run }), timers.length);
+    env.clearTimeout = () => undefined;
+    const fireTimers = () => timers.splice(0).forEach((t) => t.run());
+    return { env, warnings, beacons, fireTimers };
+  }
+
+  it("offers both methods beside fetchPage once the script has loaded", () => {
+    const { env } = pageWith(GOOD);
+    install(env);
+    const sdk = env.contentSdk as Record<string, unknown>;
+    expect(typeof sdk.watchView).toBe("function");
+    expect(typeof sdk.trackLinkClick).toBe("function");
+  });
+
+  it("sends a link click to the tag's service address with the tag's platform id", () => {
+    const { env, beacons, fireTimers } = pageWith(GOOD);
+    install(env);
+    (env.contentSdk as { trackLinkClick: (i: unknown, o?: unknown) => void }).trackLinkClick(item, { placementId: "latest" });
+    fireTimers();
+    expect(beacons).toHaveLength(1);
+    expect(beacons[0]?.url).toBe("https://api.example.com/api/v1/events");
+    expect(JSON.parse(beacons[0]?.body ?? "")).toEqual({
+      platform_id: "listings",
+      events: [{ kind: "link_click", item_id: ID, occurred_at: expect.any(String), placement_id: "latest" }],
+    });
+  });
+
+  it("returns a stop from watchView, and watches nothing and warns once for a bad element", () => {
+    const { env, warnings } = pageWith(GOOD);
+    install(env);
+    const sdk = env.contentSdk as { watchView: (e: unknown, i: unknown) => unknown };
+    expect(typeof sdk.watchView(null, item)).toBe("function");
+    expect(warnings).toHaveLength(1);
+  });
+
+  it("runs queued watchView and trackLinkClick entries, in order with fetchPage, after load", async () => {
+    const order: string[] = [];
+    jest.spyOn(client, "fetchPage").mockImplementation((async (target: { placementId: string }) => {
+      order.push(`fetch ${target.placementId}`);
+      return okPage("x");
+    }) as never);
+    const { env, beacons, fireTimers, warnings } = pageWith(GOOD, {
+      q: [["trackLinkClick", item], ["fetchPage", "latest"], ["watchView", null, item], ["trackLinkClick", { id: "bad" }]],
+    });
+    install(env);
+    await flush();
+    fireTimers();
+    expect(order).toEqual(["fetch latest"]);
+    expect(beacons).toHaveLength(1);
+    expect(warnings).toHaveLength(2);
+    jest.restoreAllMocks();
+  });
+
+  it("runs entries pushed after load at once", () => {
+    const stub = { q: [] as unknown[] };
+    const { env, beacons, fireTimers } = pageWith(GOOD, stub);
+    install(env);
+    stub.q.push(["trackLinkClick", item]);
+    fireTimers();
+    expect(beacons).toHaveLength(1);
+    expect(stub.q).toHaveLength(0);
+  });
+
+  it("offers neither method, and replays nothing, when a tag setting is missing", () => {
+    const { env, warnings, beacons } = pageWith({ "data-platform-id": "listings" }, { q: [["trackLinkClick", item]] });
+    install(env);
+    const sdk = env.contentSdk as Record<string, unknown>;
+    expect(sdk.watchView).toBeUndefined();
+    expect(sdk.trackLinkClick).toBeUndefined();
+    expect(beacons).toEqual([]);
+    expect(warnings).toHaveLength(1);
+  });
+
+  it("changes nothing on a second load", () => {
+    const { env, warnings } = pageWith(GOOD);
+    install(env);
+    const sdk = env.contentSdk as Record<string, unknown>;
+    const first = { watchView: sdk.watchView, trackLinkClick: sdk.trackLinkClick, fetchPage: sdk.fetchPage };
+    install(env);
+    expect({ watchView: sdk.watchView, trackLinkClick: sdk.trackLinkClick, fetchPage: sdk.fetchPage }).toEqual(first);
+    expect(warnings).toEqual(["[content-sdk] The script was loaded twice; the second load was ignored."]);
   });
 });

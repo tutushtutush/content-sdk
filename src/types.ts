@@ -73,3 +73,17 @@ export interface DeliveryError {
 }
 
 export type Result = { ok: true; page: Page } | { ok: false; error: DeliveryError };
+
+/** Where events go: the service's base address and the platform id. A fetch target is accepted too. */
+export interface ReportTarget {
+  baseUrl: string;
+  platformId: string;
+}
+
+/** Optional facts about one reported view or click. Both are sent as given when they are valid. */
+export interface ViewOptions {
+  /** The placement the item was read through: 3 to 40 characters of a-z, 0-9 and -. */
+  placementId?: string;
+  /** Opaque text naming who or what saw it, 1 to 128 characters. The SDK makes none and stores none. */
+  actorRef?: string;
+}

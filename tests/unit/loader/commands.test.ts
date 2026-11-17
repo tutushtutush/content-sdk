@@ -1,4 +1,4 @@
-import { makeFetchPage } from "../../../src/loader/commands";
+import { makeFetchPage, makeReporter, makeTrackLinkClick, makeWatchView } from "../../../src/loader/commands";
 import type { Result } from "../../../src/types";
 
 const settings = { baseUrl: "https://api.example.com", platformId: "listings" };
@@ -62,5 +62,41 @@ describe("makeFetchPage", () => {
     expect(await method("latest")).toBe(okResult);
     expect(await method("latest", {}, "x")).toBe(okResult);
     expect(await method("latest", {}, null)).toBe(okResult);
+  });
+});
+
+describe("makeReporter, makeWatchView and makeTrackLinkClick (spec 004)", () => {
+  function fakeReporter() {
+    const calls: unknown[][] = [];
+    return {
+      calls,
+      reporter: {
+        watchView: (...args: unknown[]) => (calls.push(["watchView", ...args]), () => undefined),
+        trackLinkClick: (...args: unknown[]) => void calls.push(["trackLinkClick", ...args]),
+      },
+    };
+  }
+
+  it("makes the reporter from the tag's base address and platform id, over the page's environment", () => {
+    const targets: unknown[] = [];
+    const envs: unknown[] = [];
+    makeReporter(settings, { console: { warn: () => undefined } }, ((target: unknown, env: unknown) => {
+      targets.push(target);
+      envs.push(env);
+      return fakeReporter().reporter;
+    }) as never);
+    expect(targets).toEqual([{ baseUrl: "https://api.example.com", platformId: "listings" }]);
+    expect(typeof (envs[0] as { warn: unknown }).warn).toBe("function");
+  });
+
+  it("passes the call's arguments on, and hands back the stop of a watch", () => {
+    const { calls, reporter } = fakeReporter();
+    const element = {};
+    const item = { id: "i" };
+    const options = { placementId: "latest" };
+    const stop = makeWatchView(reporter as never)(element, item, options);
+    expect(typeof stop).toBe("function");
+    expect(makeTrackLinkClick(reporter as never)(item, options)).toBeUndefined();
+    expect(calls).toEqual([["watchView", element, item, options], ["trackLinkClick", item, options]]);
   });
 });

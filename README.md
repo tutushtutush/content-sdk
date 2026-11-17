@@ -86,6 +86,31 @@ const next = await fetchPage(target, { q: "toyota corolla", limit: 10, cursor: p
 | `contract_mismatch` | a 200 answer that does not match the contract |
 | `invalid_target` | base address, platform id or placement id unusable; `fields` names it |
 
+## Reporting views and clicks
+
+The SDK tells content-api what visitors do with the items you show, so the service can count and rank them later. You hand it the element you rendered and the item; it renders and changes nothing itself.
+
+```js
+// after rendering an item into `element` (a framework ref callback, say)
+const stop = window.contentSdk.watchView(element, item, { placementId: "latest", actorRef: "device-abc" });
+stop(); // optional: cancel if the card is taken away before it was seen
+
+// in your own click handler, when the visitor follows the item's link out
+window.contentSdk.trackLinkClick(item, { placementId: "latest", actorRef: "device-abc" });
+
+// before the script has loaded, push onto the queue as for fetchPage (a queued watchView cannot hand back a stop)
+window.contentSdk.q.push(["watchView", element, item, { placementId: "latest" }]);
+window.contentSdk.q.push(["trackLinkClick", item]);
+```
+
+As a library the same two functions take the target first: `watchView({ baseUrl, platformId }, element, item, options)` and `trackLinkClick({ baseUrl, platformId }, item, options)`. Without an `IntersectionObserver` (Node) `watchView` does nothing.
+
+- **A view** is the item seen on screen: at least 50% of the element visible for one continuous second. It is reported once per `watchView` call; a card that is never seen that way is given up on after two minutes and reports nothing. **A click** is reported every time you call `trackLinkClick`. The SDK adds no listener to your elements.
+- `item` is what `fetchPage` returned; only `item.id` is read, and it must be a UUID (any other id is one console warning and no event).
+- `placementId` (the placement you read the item through; 3 to 40 characters of `a-z`, `0-9`, `-`) and `actorRef` (opaque text of 1 to 128 characters, for example a device or session id you already have) are optional and sent as given. A value the service would refuse is left out with one console warning. The SDK makes no id of its own and writes no cookie and no storage.
+- Events wait about two seconds after the first one, then leave together; 50 waiting events leave at once; and everything waiting leaves when the page is hidden or being left. A request holds at most 50 events and nothing is sent when nothing waits. They go as one `text/plain` beacon to `/api/v1/events` (so no pre-flight), with one keep-alive `fetch` if the browser refuses the beacon. A failed send is not retried: these events are best effort and not for billing.
+- Nothing throws into your page; a bad call is one console warning. Full contract: [specs/004-view-events/contracts/events-api.md](specs/004-view-events/contracts/events-api.md).
+
 ## Build and test
 
 ```sh
