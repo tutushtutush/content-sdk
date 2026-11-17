@@ -61,6 +61,14 @@ Decisions, the alternatives considered, and what was rejected, with the reason. 
 
 - **Convergence (T026)**: `/speckit-converge` found that the library form (`createLibrary(...).trackLinkClick(target, item, options)`) passed `sessionId` through but had no test. Three cases were added to `tests/unit/events/library.test.ts` (a click with and without an id, a view once seen, a bad value with one warning that does not hold it). With the library's click path changed to drop its options, 4 of them fail; restored, all 1,678 tests pass.
 
+## R10. Accepted limits found in review (PR 5, 2026-11-17)
+
+- **`null` is none for `sessionId` but `actorRef: null` still warns.** `actorRef` keeps its v0.4.0 behaviour (R4); changing it would alter a warned input for existing platforms. A platform that builds one options object leaves `actorRef` out when it has none. Aligning it is a change of its own.
+- **The batch has no byte-size guard.** `sendBeacon` and a keep-alive `fetch` are limited to about 64 KiB. A batch of 50 events whose `actor_ref` and `session_id` are both 128 emoji (512 bytes each) is about 62 KB, near that cap, and a send the browser refuses is lost without a warning (the answer is never read, spec 004). This change roughly doubles the worst-case size of an event, but real ids are short ASCII (tens of bytes, so a 50-event batch is a few KB). A size guard in the batcher (split the batch by bytes, not only by 50 events) would remove the case; it belongs to its own change with the transport's tests.
+- **Per-option `try/catch` boilerplate** is now three copies (`placementId`, `actorRef`, `sessionId`). A small `readOption` helper would remove it; left alone so this change stays a few lines beside the existing shape, and a fourth option is the moment to extract it.
+- **The opaque-text check is now one helper** (`isOpaqueText` in `rules.ts`) shared by `actorRef` and `sessionId`, with one spread of the string instead of three; the `actorRef` tests pass unedited. The `sessionId` warning now names the NUL rule too.
+- **The 004 contract's wire section** said only `placement_id` and `actor_ref` appear and "nothing else"; it now names `session_id` from 0.5.0 and links the delta.
+
 ## Approaches started and rejected
 
 None. Nothing was started and then reversed during the build, apart from the mutation attempt in R9, which was a mistake in the test of the tests and not an approach.

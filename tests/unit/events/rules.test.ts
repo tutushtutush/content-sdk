@@ -165,7 +165,7 @@ describe("eventFor: the session id (spec 005)", () => {
     const built = sessionOf(bad);
     expect(built.event).toEqual({ kind: "view", item_id: ID, occurred_at: "2026-11-17T08:00:00.123Z" });
     expect("session_id" in (built.event ?? {})).toBe(false);
-    expect(built.warnings).toEqual(["[content-sdk] sessionId must be 1 to 128 characters of text; it was left out."]);
+    expect(built.warnings).toEqual(["[content-sdk] sessionId must be 1 to 128 characters of text with no NUL; it was left out."]);
   });
 
   it("never puts the value given in a warning", () => {

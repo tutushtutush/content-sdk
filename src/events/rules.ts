@@ -24,6 +24,13 @@ const SESSION_MAX = 128;
 
 const PREFIX = "[content-sdk]";
 
+/** Opaque text the platform chose (an actor reference, a session id): 1 to `max` characters, counted as characters, no NUL. */
+function isOpaqueText(value: unknown, max: number): value is string {
+  if (typeof value !== "string" || value.includes("\u0000")) return false;
+  const characters = [...value].length;
+  return characters >= 1 && characters <= max;
+}
+
 /** What the service refuses, refused here first: it refuses a whole batch for one bad value (research R4). */
 export function eventFor(kind: EventKind, item: unknown, options: unknown, now: number): Built {
   const warnings: string[] = [];
@@ -70,14 +77,14 @@ export function eventFor(kind: EventKind, item: unknown, options: unknown, now: 
     else warnings.push(`${PREFIX} placementId must be 3 to 40 characters of a-z, 0-9 and -; it was left out.`);
   }
   if (actorRef !== undefined) {
-    if (typeof actorRef === "string" && [...actorRef].length >= 1 && [...actorRef].length <= ACTOR_MAX && !actorRef.includes("\u0000")) event.actor_ref = actorRef;
+    if (isOpaqueText(actorRef, ACTOR_MAX)) event.actor_ref = actorRef;
     else warnings.push(`${PREFIX} actorRef must be 1 to ${ACTOR_MAX} characters of text; it was left out.`);
   }
 
   // The visit, as the platform names it (spec 005): sent as given, never made or kept here. null is none.
   if (sessionId !== undefined && sessionId !== null) {
-    if (typeof sessionId === "string" && [...sessionId].length >= 1 && [...sessionId].length <= SESSION_MAX && !sessionId.includes("\u0000")) event.session_id = sessionId;
-    else warnings.push(`${PREFIX} sessionId must be 1 to ${SESSION_MAX} characters of text; it was left out.`);
+    if (isOpaqueText(sessionId, SESSION_MAX)) event.session_id = sessionId;
+    else warnings.push(`${PREFIX} sessionId must be 1 to ${SESSION_MAX} characters of text with no NUL; it was left out.`);
   }
 
   return { event, warnings };

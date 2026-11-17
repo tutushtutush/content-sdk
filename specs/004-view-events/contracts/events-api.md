@@ -56,7 +56,7 @@ One request per flush to `POST {baseUrl}/api/v1/events`, `text/plain`, body:
 
 - Events wait about 2 seconds after the first was queued, leave at once when 50 are waiting, and leave when the page is hidden or being left. No request when nothing waits. Never more than 50 events in one request.
 - Sent as a beacon; when the beacon is missing or refuses, once as a keep-alive `fetch`. Never retried. The answer is never read, so the SDK does not know whether the service stored the batch.
-- `placement_id` and `actor_ref` appear only when given and valid. Nothing else about the item is sent.
+- `placement_id` and `actor_ref` appear only when given and valid, and from version 0.5.0 so does `session_id` (spec 005, [events-api-delta](../../005-session-id/contracts/events-api-delta.md)). Nothing else about the item is sent.
 
 The optional `sessionId` (the visit, supplied by the platform) was added in version 0.5.0: see [events-api-delta](../../005-session-id/contracts/events-api-delta.md), which amends this page.
 
