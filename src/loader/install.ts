@@ -1,5 +1,5 @@
 import { fetchPage } from "../fetch-page";
-import { makeFetchPage, makeRunner } from "./commands";
+import { makeFetchPage, makeReporter, makeRunner, makeTrackLinkClick, makeWatchView } from "./commands";
 import type { Env } from "./env";
 import { readSettings } from "./settings";
 import { clip, warn } from "./warn";
@@ -7,6 +7,8 @@ import { clip, warn } from "./warn";
 interface Sdk {
   q: unknown[];
   fetchPage?: unknown;
+  watchView?: unknown;
+  trackLinkClick?: unknown;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -23,7 +25,7 @@ export function install(env: Env): void {
   }
 }
 
-/** Reads the tag, offers `contentSdk.fetchPage`, replays the queue. */
+/** Reads the tag, offers `contentSdk.fetchPage`, `watchView` and `trackLinkClick`, replays the queue. */
 function start(env: Env): void {
   // document.currentScript names the running script only during this first synchronous run.
   const script = env.document?.currentScript;
@@ -46,7 +48,10 @@ function start(env: Env): void {
   const queue = sdk.q;
 
   const method = makeFetchPage(read.settings, { fetchPage, env });
-  const run = makeRunner({ fetchPage: method }, env);
+  const reporter = makeReporter(read.settings, env);
+  const watchView = makeWatchView(reporter);
+  const trackLinkClick = makeTrackLinkClick(reporter);
+  const run = makeRunner({ fetchPage: method, watchView, trackLinkClick }, env);
 
   // Replay in order; an index loop also picks up entries pushed while it runs.
   for (let i = 0; i < queue.length; i++) run(queue[i]);
@@ -60,5 +65,7 @@ function start(env: Env): void {
 
   // Last, so a start that fails above (a frozen queue, say) leaves no method behind
   // and the page is not taken for "already loaded".
+  sdk.watchView = watchView;
+  sdk.trackLinkClick = trackLinkClick;
   sdk.fetchPage = method;
 }

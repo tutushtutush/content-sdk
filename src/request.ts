@@ -46,8 +46,13 @@ function checkSearch(text: unknown): { value?: string } | { error: DeliveryError
   return text.trim() === "" ? {} : { value: text };
 }
 
-/** Checks the target and query and builds the request address, or says what is wrong. */
-export function buildRequestUrl(target: Target, query?: Query): Built {
+export type Base = { origin: string; prefix: string; platformId: string } | { error: DeliveryError };
+
+/**
+ * Checks the service address and the platform id of a target, in that order, and gives the address
+ * split for building paths on it. Both the delivery request and the events request start from it.
+ */
+export function checkBase(target: unknown): Base {
   if (!isRecord(target)) return { error: invalidTarget("target") };
 
   let base: URL;
@@ -61,6 +66,13 @@ export function buildRequestUrl(target: Target, query?: Query): Built {
   // A query or fragment would be dropped silently; say so instead.
   if (base.search !== "" || base.hash !== "") return { error: invalidTarget("baseUrl") };
   if (!usableId(target.platformId)) return { error: invalidTarget("platformId") };
+  return { origin: base.origin, prefix: base.pathname.replace(/\/+$/, ""), platformId: target.platformId };
+}
+
+/** Checks the target and query and builds the request address, or says what is wrong. */
+export function buildRequestUrl(target: Target, query?: Query): Built {
+  const checked = checkBase(target);
+  if ("error" in checked) return checked;
   if (!usableId(target.placementId)) return { error: invalidTarget("placementId") };
 
   if (query !== undefined && !isRecord(query)) return { error: badQuery() };
@@ -91,9 +103,8 @@ export function buildRequestUrl(target: Target, query?: Query): Built {
     if (q.cursor.length > 0) params.set("cursor", q.cursor);
   }
 
-  const prefix = base.pathname.replace(/\/+$/, "");
   const url = new URL(
-    `${base.origin}${prefix}/api/v1/delivery/${encodeId(target.platformId)}/${encodeId(target.placementId)}`,
+    `${checked.origin}${checked.prefix}/api/v1/delivery/${encodeId(checked.platformId)}/${encodeId(target.placementId)}`,
   );
   const search = params.toString();
   return { url: search === "" ? url.href : `${url.href}?${search}` };
