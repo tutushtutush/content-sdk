@@ -58,6 +58,8 @@ One request per flush to `POST {baseUrl}/api/v1/events`, `text/plain`, body:
 - Sent as a beacon; when the beacon is missing or refuses, once as a keep-alive `fetch`. Never retried. The answer is never read, so the SDK does not know whether the service stored the batch.
 - `placement_id` and `actor_ref` appear only when given and valid. Nothing else about the item is sent.
 
+The optional `sessionId` (the visit, supplied by the platform) was added in version 0.5.0: see [events-api-delta](../../005-session-id/contracts/events-api-delta.md), which amends this page.
+
 ## Not in this version
 
 A generic `reportEvent`, a tag attribute for the actor reference, retries, deduplication, remembering the placement.

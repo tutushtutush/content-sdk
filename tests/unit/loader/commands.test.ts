@@ -99,4 +99,15 @@ describe("makeReporter, makeWatchView and makeTrackLinkClick (spec 004)", () => 
     expect(makeTrackLinkClick(reporter as never)(item, options)).toBeUndefined();
     expect(calls).toEqual([["watchView", element, item, options], ["trackLinkClick", item, options]]);
   });
+
+  it("hands the options, a sessionId among them, to the reporter unchanged (spec 005)", () => {
+    const { calls, reporter } = fakeReporter();
+    const item = { id: "i" };
+    const options = { placementId: "latest", actorRef: "device-1", sessionId: "s-1" };
+    makeWatchView(reporter as never)({}, item, options);
+    makeTrackLinkClick(reporter as never)(item, options);
+    expect((calls[0]?.[3] as typeof options)).toBe(options);
+    expect((calls[1]?.[2] as typeof options)).toBe(options);
+    expect(options).toEqual({ placementId: "latest", actorRef: "device-1", sessionId: "s-1" });
+  });
 });

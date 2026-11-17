@@ -226,3 +226,80 @@ describe("reporter: sending", () => {
     expect(f.beacons).toHaveLength(1);
   });
 });
+
+describe("the session id (spec 005)", () => {
+  it("sends the sessionId of a link click as session_id, beside the other options", () => {
+    const { f, reporter, sent } = setup();
+    reporter.trackLinkClick(item, { placementId: "latest", actorRef: "device-abc", sessionId: "s-1" });
+    f.clock.advance(2000);
+    expect(sent()).toEqual([
+      { platform_id: "listings", events: [{ kind: "link_click", item_id: ID, occurred_at: expect.any(String), placement_id: "latest", actor_ref: "device-abc", session_id: "s-1" }] },
+    ]);
+  });
+
+  it("sends the sessionId of a view once the view is seen", () => {
+    const { f, reporter, sent, see } = setup();
+    reporter.watchView(element, item, { sessionId: "s-1" });
+    see();
+    f.clock.advance(2000);
+    expect(sent()[0]?.events).toEqual([{ kind: "view", item_id: ID, occurred_at: expect.any(String), session_id: "s-1" }]);
+  });
+
+  it("gives each of five events reported across two sessions the id of its own call, and keeps them five events", () => {
+    const { f, reporter, sent } = setup();
+    const ids = ["s-a", "s-b", "s-a", "s-b", "s-a"];
+    ids.forEach((sessionId, n) => reporter.trackLinkClick({ id: n % 2 === 0 ? ID : ID2 }, { sessionId, placementId: "latest" }));
+    f.clock.advance(2000);
+    const events = sent().flatMap((batch) => batch.events);
+    expect(events).toHaveLength(5);
+    expect(events.map((e) => e.session_id)).toEqual(ids);
+    expect(events.map((e) => e.placement_id)).toEqual(Array(5).fill("latest"));
+  });
+
+  it("still sends the event, without the key, when the sessionId is bad, and warns once with no value in it", () => {
+    const { f, reporter, sent } = setup();
+    reporter.trackLinkClick(item, { sessionId: "secret-visit".repeat(20) });
+    f.clock.advance(2000);
+    expect(sent()[0]?.events).toEqual([{ kind: "link_click", item_id: ID, occurred_at: expect.any(String) }]);
+    expect(f.warnings).toHaveLength(1);
+    expect(f.warnings[0]).not.toContain("secret");
+  });
+
+  it("sends a batch whole when one of its events has a bad sessionId, losing none", () => {
+    const { f, reporter, sent } = setup();
+    reporter.trackLinkClick(item, { sessionId: "ok-1" });
+    reporter.trackLinkClick(item, { sessionId: "" });
+    reporter.trackLinkClick(item, { sessionId: "ok-3" });
+    reporter.trackLinkClick(item);
+    f.clock.advance(2000);
+    const events = sent().flatMap((batch) => batch.events);
+    expect(events.map((e) => e.session_id)).toEqual(["ok-1", undefined, "ok-3", undefined]);
+    expect(f.warnings).toHaveLength(1);
+  });
+
+  it("remembers nothing between calls: a call with an id, then one with none, sends the id only on the first", () => {
+    const { f, reporter, sent, see } = setup();
+    reporter.trackLinkClick(item, { sessionId: "s-1" });
+    reporter.trackLinkClick(item);
+    reporter.watchView(element, item, { sessionId: "s-2" });
+    reporter.watchView({ tag: "second" }, { id: ID2 });
+    see(0);
+    see(1);
+    f.clock.advance(2000);
+    const events = sent().flatMap((batch) => batch.events);
+    expect(events.map((e) => [e.kind, e.item_id, e.session_id])).toEqual([
+      ["link_click", ID, "s-1"], ["link_click", ID, undefined], ["view", ID, "s-2"], ["view", ID2, undefined],
+    ]);
+  });
+
+  it("shares nothing between two reporters", () => {
+    const first = setup();
+    const second = setup();
+    first.reporter.trackLinkClick(item, { sessionId: "s-1" });
+    second.reporter.trackLinkClick(item);
+    first.f.clock.advance(2000);
+    second.f.clock.advance(2000);
+    expect(first.sent()[0]?.events[0]?.session_id).toBe("s-1");
+    expect(second.sent()[0]?.events[0]).not.toHaveProperty("session_id");
+  });
+});

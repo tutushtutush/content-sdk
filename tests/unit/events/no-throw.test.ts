@@ -137,3 +137,29 @@ describe("never throws, whatever the page does", () => {
     expect(f.warnings).toHaveLength(1);
   });
 });
+
+describe("never throws, whatever sessionId the platform passes (spec 005)", () => {
+  const hostile: [string, unknown][] = [
+    ["a getter that throws", { get sessionId(): string { throw new Error("boom"); } }],
+    ["a proxy that throws on any access", new Proxy({}, { get: throwing, has: throwing, ownKeys: throwing })],
+    ["a Symbol", { sessionId: Symbol("s") }],
+    ["a BigInt", { sessionId: 10n }],
+    ["a huge string", { sessionId: "x".repeat(1_000_000) }],
+    ["a cyclic object", (() => { const c: Record<string, unknown> = {}; c.sessionId = c; return c; })()],
+    ["a frozen object", Object.freeze({ sessionId: "s-1" })],
+    ["an object whose toString throws", { sessionId: { toString: throwing } }],
+  ];
+
+  it.each(hostile)("watchView and trackLinkClick with %s still report a valid item", (_name, option) => {
+    const f = fakeEnv();
+    const reporter = createReporter(target, f.env);
+    expect(() => reporter.trackLinkClick(good, option)).not.toThrow();
+    let stop: unknown;
+    expect(() => {
+      stop = reporter.watchView({}, good, option);
+    }).not.toThrow();
+    expect(() => (stop as () => void)()).not.toThrow();
+    expect(() => f.clock.advance(200_000)).not.toThrow();
+    expect(f.beacons.length).toBeGreaterThan(0);
+  });
+});

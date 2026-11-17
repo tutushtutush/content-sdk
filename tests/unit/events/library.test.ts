@@ -71,6 +71,50 @@ describe("createLibrary", () => {
     expect(Observer.made).toBe(1);
   });
 
+  describe("the session id (spec 005)", () => {
+    class SeenObserver {
+      static last: SeenObserver | undefined;
+      constructor(private readonly callback: (entries: { isIntersecting: boolean; intersectionRatio: number }[]) => void) {
+        SeenObserver.last = this;
+      }
+      observe(): void {}
+      disconnect(): void {}
+      see(): void {
+        this.callback([{ isIntersecting: true, intersectionRatio: 0.9 }]);
+      }
+    }
+    const eventsOf = (beacons: { body: string }[]) => beacons.flatMap((b) => (JSON.parse(b.body) as { events: Record<string, unknown>[] }).events);
+
+    it("sends the sessionId of a link click through the library form, and none when none is given", () => {
+      const { globals, beacons, fire } = page();
+      const library = createLibrary(globals);
+      library.trackLinkClick(target, item, { sessionId: "s-1" });
+      library.trackLinkClick(target, item);
+      fire();
+      const events = eventsOf(beacons);
+      expect(events.map((e) => e.session_id)).toEqual(["s-1", undefined]);
+      expect(events[1]).not.toHaveProperty("session_id");
+    });
+
+    it("sends the sessionId of a view through the library form once the view is seen", () => {
+      const { globals, beacons, fire } = page({ IntersectionObserver: SeenObserver as never });
+      createLibrary(globals).watchView(target, {}, item, { sessionId: "s-2" });
+      SeenObserver.last?.see();
+      fire(); // the dwell completes and the event is queued
+      fire(); // the batch leaves
+      expect(eventsOf(beacons)).toEqual([{ kind: "view", item_id: ID, occurred_at: expect.any(String), session_id: "s-2" }]);
+    });
+
+    it("leaves out a bad sessionId with one warning that does not hold it, and still sends the click", () => {
+      const { globals, warnings, beacons, fire } = page();
+      createLibrary(globals).trackLinkClick(target, item, { sessionId: "secret-visit".repeat(20) });
+      fire();
+      expect(eventsOf(beacons)).toEqual([{ kind: "link_click", item_id: ID, occurred_at: expect.any(String) }]);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).not.toContain("secret");
+    });
+  });
+
   it.each([["missing", undefined], ["null", null], ["a string", "x"], ["a number", 5]])("warns once, returns a stop and sends nothing for a target that is %s", (_name, bad) => {
     const { globals, warnings, beacons, fire } = page();
     const library = createLibrary(globals);
