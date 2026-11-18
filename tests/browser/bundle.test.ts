@@ -104,6 +104,31 @@ describe("the built browser file", () => {
     expect(urls).toEqual([]);
   });
 
+  it("returns the view_count of each item, for a queued command and a direct call", async () => {
+    const { fn } = fakeFetch();
+    w.fetch = fn;
+    const queued: unknown[] = [];
+    w.contentSdk = { q: [["fetchPage", "latest", {}, (r: unknown) => queued.push(r)]] };
+    loadScript(GOOD);
+    await new Promise((r) => setTimeout(r, 20));
+    const direct = await w.contentSdk?.fetchPage?.("latest", { limit: 5 });
+    const counts = (r: unknown) => (r as { page: { items: Array<{ view_count: number }> } }).page.items.map((item) => item.view_count);
+    expect(counts(queued[0])).toEqual([1204]);
+    expect(counts(direct)).toEqual([1204]);
+  });
+
+  it("answers a page whose count is bad with contract_mismatch to the callback and the promise, and throws nothing", async () => {
+    const bad = (async () => ({ status: 200, text: async () => JSON.stringify({ items: [{ ...examplePage.items[0], view_count: "5" }], next_cursor: null }) })) as unknown as typeof fetch;
+    w.fetch = bad;
+    const queued: unknown[] = [];
+    w.contentSdk = { q: [["fetchPage", "latest", {}, (r: unknown) => queued.push(r)]] };
+    loadScript(GOOD);
+    await new Promise((r) => setTimeout(r, 20));
+    const direct = await w.contentSdk?.fetchPage?.("latest", {});
+    expect(queued).toEqual([expect.objectContaining({ ok: false, error: expect.objectContaining({ kind: "contract_mismatch" }) })]);
+    expect(direct).toMatchObject({ ok: false, error: { kind: "contract_mismatch" } });
+  });
+
   it("sends sort for a command queued before load and for a direct call after it", async () => {
     const { urls, fn } = fakeFetch();
     w.fetch = fn;

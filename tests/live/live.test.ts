@@ -14,7 +14,7 @@ describe("hosted test service", () => {
     expect(result.page.nextCursor === null || typeof result.page.nextCursor === "string").toBe(true);
     for (const item of result.page.items) {
       expect(Object.keys(item).sort()).toEqual(
-        ["created_at", "description", "id", "images", "language", "platform", "tags", "title", "url"],
+        ["created_at", "description", "id", "images", "language", "platform", "tags", "title", "url", "view_count"],
       );
     }
   });

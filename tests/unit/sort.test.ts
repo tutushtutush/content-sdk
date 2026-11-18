@@ -32,8 +32,8 @@ describe("fetchPage: sort", () => {
     expect(new URL(calls[0].url).search).toBe(`?sort=${sort}`);
     if (!result.ok) throw new Error("unexpected error");
     expect(result.page.items.map((i) => i.id)).toEqual(["a", "b"]);
-    // The same nine fields as ever: no score, and the service's view_count is not returned (research R10).
-    for (const shown of result.page.items) expect(Object.keys(shown).sort()).toEqual(["created_at", "description", "id", "images", "language", "platform", "tags", "title", "url"]);
+    // The item's fields: no score (the service's view_count is returned since feature 007).
+    for (const shown of result.page.items) expect(Object.keys(shown).sort()).toEqual(["created_at", "description", "id", "images", "language", "platform", "tags", "title", "url", "view_count"]);
   });
 
   it("sends no sort without one, and the SDK adds no default", async () => {

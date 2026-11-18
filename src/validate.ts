@@ -16,10 +16,18 @@ function parseImage(value: unknown): Image | null {
   return { url };
 }
 
+// A count is a whole number of 0 or more that a JSON number can carry exactly. Only `typeof` and
+// `Number.isSafeInteger` touch the value (no string conversion), and `0` is a good count, so nothing here
+// tests truthiness. `-0` is the number zero and is returned as 0.
+function parseViewCount(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) return null;
+  return value === 0 ? 0 : value;
+}
+
 // Built field by field, so nothing the service adds (or names `__proto__`) reaches the result.
 function parseItem(value: unknown): Item | string {
   if (!isRecord(value)) return "an item is not an object";
-  const { id, platform, title, description, language, tags, images, created_at, url } = value;
+  const { id, platform, title, description, language, tags, images, created_at, url, view_count } = value;
 
   for (const [name, text] of Object.entries({ id, platform, title, description, language, created_at })) {
     if (typeof text !== "string") return `item ${name} is not text`;
@@ -38,6 +46,9 @@ function parseItem(value: unknown): Item | string {
     return "item url is neither null nor an http or https address";
   }
 
+  const viewCount = parseViewCount(view_count);
+  if (viewCount === null) return "item view_count is not a whole number of 0 or more";
+
   return {
     id: id as string,
     platform: platform as string,
@@ -48,6 +59,7 @@ function parseItem(value: unknown): Item | string {
     images: parsedImages,
     created_at: created_at as string,
     url: url as string | null,
+    view_count: viewCount,
   };
 }
 
