@@ -74,6 +74,33 @@ const next = await fetchPage(target, { q: "toyota corolla", limit: 10, cursor: p
 
 `fetchPage` never throws or rejects. Every outcome is `{ ok: true, page }` or `{ ok: false, error }`. All text in an item (title, description, tags, addresses) is untrusted: set it through your framework's escaping, never build HTML from it.
 
+### Sort
+
+Add `sort` to choose the order of a page, per call. It takes one of three values, in lower case:
+
+| `sort` | Order |
+|---|---|
+| `"popular"` | the most viewed first, with older items counting for less (a home page of popular posts from any category) |
+| `"newest"` | newest first |
+| `"oldest"` | oldest first |
+
+```ts
+// a home page of popular posts, and a search page that keeps the service's own order
+const home = await fetchPage(target, { sort: "popular", limit: 10 });
+const found = await fetchPage(target, { q: "toyota corolla" });
+// the next page of the home list: the same sort (and the same q, if any) with the cursor
+const more = await fetchPage(target, { sort: "popular", limit: 10, cursor: home.ok ? home.page.nextCursor ?? undefined : undefined });
+```
+
+- **No `sort` keeps the service's order** (newest first, or best match first with `q`). The SDK adds no default and remembers nothing between calls, so send `sort` on every call that wants one.
+- **A cursor belongs to the order, and the `q`, that made it.** Pass the same `sort` and `q` while paging; the service refuses a cursor used with another order, and the SDK returns that as a `bad_query` error naming `cursor`.
+- **With `q` and a `sort`, only the matches come back, in the order you asked for.** To keep best match first, send no `sort`.
+- **A bad `sort` is a `bad_query` error naming `sort`, without a request**: another word, a different case (`"Popular"`), spaces, an empty text, or a value that is not text. An empty text is not "no sort": leave the key out (or pass `undefined`) for the default, for example when a dropdown has a "default" choice.
+- **A `popular` list is ranked as of its first page**, so time passing between two pages moves nothing. A change in an item's view count between two pages can still repeat or skip an item; fetch the list in one page (`limit` up to 50) or treat a repeat as harmless.
+- The items come back as before, in the service's order; the SDK computes and returns no score.
+
+The script tag takes the same option: `window.contentSdk.fetchPage("latest", { sort: "popular" })`, or queued.
+
 ## Errors
 
 | `error.kind` | When |

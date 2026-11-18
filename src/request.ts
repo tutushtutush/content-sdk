@@ -46,6 +46,17 @@ function checkSearch(text: unknown): { value?: string } | { error: DeliveryError
   return text.trim() === "" ? {} : { value: text };
 }
 
+// The orders the service accepts (content-api spec 020). Compared with `===`, never converted to text, so
+// no value a caller passes can throw here.
+const SORTS = ["popular", "newest", "oldest"] as const;
+
+/** An empty sort is not "not given" (unlike `q`): the service refuses it too, so it is a mistake to report. */
+function checkSort(value: unknown): { value?: string } | { error: DeliveryError } {
+  if (value === undefined) return {};
+  const known = SORTS.find((name) => name === value);
+  return known === undefined ? { error: badQuery({ fields: ["sort"] }) } : { value: known };
+}
+
 export type Base = { origin: string; prefix: string; platformId: string } | { error: DeliveryError };
 
 /**
@@ -97,6 +108,10 @@ export function buildRequestUrl(target: Target, query?: Query): Built {
   const words = checkSearch(q.q);
   if ("error" in words) return words;
   if (words.value !== undefined) params.set("q", words.value);
+
+  const order = checkSort(q.sort);
+  if ("error" in order) return order;
+  if (order.value !== undefined) params.set("sort", order.value);
 
   if (q.cursor !== undefined) {
     if (typeof q.cursor !== "string" || q.cursor.length > MAX_CURSOR) return { error: badQuery({ fields: ["cursor"] }) };

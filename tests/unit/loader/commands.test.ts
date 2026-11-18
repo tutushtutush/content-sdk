@@ -42,6 +42,22 @@ describe("makeFetchPage", () => {
     expect(seen).toEqual([bad]);
   });
 
+  it("passes sort in the query to the delivery client unchanged, with the cursor", async () => {
+    const { calls, method } = setup();
+    const query = { sort: "popular", limit: 5, cursor: "c" };
+    await method("latest", query, () => {});
+    expect(calls[0]?.query).toBe(query);
+  });
+
+  it("gives a bad_query result for sort to the callback and the promise like any other result", async () => {
+    const bad: Result = { ok: false, error: { kind: "bad_query", message: "m", fields: ["sort"] } };
+    const { method } = setup(bad);
+    const seen: unknown[] = [];
+    const returned = await method("latest", { sort: "best" }, (r: unknown) => seen.push(r));
+    expect(returned).toBe(bad);
+    expect(seen).toEqual([bad]);
+  });
+
   it("gives the same result to the callback and the promise", async () => {
     const { method } = setup();
     const seen: Result[] = [];
