@@ -40,7 +40,7 @@ describe("unknown fields", () => {
     if (!result.ok) throw new Error(`unexpected ${result.error.kind}`);
     const item = result.page.items[0];
     expect(Object.keys(item).sort()).toEqual(
-      ["created_at", "description", "id", "images", "language", "platform", "tags", "title", "url"],
+      ["created_at", "description", "id", "images", "language", "platform", "tags", "title", "url", "view_count"],
     );
     expect(Object.getPrototypeOf(item)).toBe(Object.prototype);
     expect((item as unknown as { x?: number }).x).toBeUndefined();

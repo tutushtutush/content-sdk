@@ -52,6 +52,14 @@ export interface Item {
   images: Image[];
   created_at: string;
   url: string | null;
+  /**
+   * How many times the service has stored a view of this item, from every platform that reported one (not
+   * only yours): a whole number of 0 or more, `0` when none. It is raw: a visitor who refreshes ten times can
+   * add ten, so it is not a count of people and not for billing, and the service may make the rule stricter
+   * later. The SDK passes it on as the service sent it and never formats or sums it. A page whose item has
+   * no valid `view_count` is refused as `contract_mismatch`.
+   */
+  view_count: number;
 }
 
 export interface Page {

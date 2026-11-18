@@ -58,6 +58,26 @@ describe("makeFetchPage", () => {
     expect(seen).toEqual([bad]);
   });
 
+  it("hands a page whose items carry view_count to the callback and the promise as the very object it got", async () => {
+    const item = { id: "a", platform: "p", title: "t", description: "d", language: "am", tags: [], images: [], created_at: "2026-11-13T08:00:00.000Z", url: null, view_count: 1204 };
+    const counted: Result = { ok: true, page: { items: [item], nextCursor: null } };
+    const { method } = setup(counted);
+    const seen: unknown[] = [];
+    const returned = await method("latest", {}, (r: unknown) => seen.push(r));
+    expect(returned).toBe(counted);
+    expect(seen[0]).toBe(counted);
+    expect((seen[0] as { page: { items: Array<{ view_count: number }> } }).page.items[0]?.view_count).toBe(1204);
+  });
+
+  it("hands a contract_mismatch for a bad count on as it is", async () => {
+    const mismatch: Result = { ok: false, error: { kind: "contract_mismatch", message: "The answer does not match the contract: item view_count is not a whole number of 0 or more", status: 200 } };
+    const { method } = setup(mismatch);
+    const seen: unknown[] = [];
+    const returned = await method("latest", {}, (r: unknown) => seen.push(r));
+    expect(returned).toBe(mismatch);
+    expect(seen).toEqual([mismatch]);
+  });
+
   it("gives the same result to the callback and the promise", async () => {
     const { method } = setup();
     const seen: Result[] = [];

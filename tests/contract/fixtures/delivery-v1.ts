@@ -1,6 +1,7 @@
 // Bodies copied from content-api's contracts (read only):
 //   specs/009-public-delivery-endpoint/contracts/delivery-v1.md  (answer example, errors)
 //   specs/010-item-link-out/contracts/item-url.md                (item url)
+//   specs/019-item-view-counts/contracts/delivery-v1-delta.md    (item view_count)
 
 export const exampleItem = {
   id: "item-1",
@@ -12,6 +13,7 @@ export const exampleItem = {
   images: [{ url: "https://images.example.com/post-images/a.jpg" }],
   created_at: "2026-11-13T08:00:00.000Z",
   url: "https://listings.example.com/posts/item-1",
+  view_count: 1204,
 };
 
 export const examplePage = { items: [exampleItem], next_cursor: null };

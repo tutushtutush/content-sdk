@@ -60,6 +60,24 @@ for (;;) {
 }
 ```
 
+### An item and its view count
+
+Each item is plain data with these fields: `id`, `platform`, `title`, `description`, `language`, `tags`, `images` (each with a `url`), `created_at`, `url` (the poster's own link out of the post, or `null`) and `view_count`.
+
+```ts
+for (const item of result.page.items) {
+  show(`${item.title}: ${item.view_count} views`); // the wording, and any thousands separator, are yours
+}
+```
+
+`view_count` is a whole number of 0 or more: how many times the service has stored a view of the item, `0` when none. Read it with these limits in mind:
+
+- **It is raw.** Every stored view counts, so a visitor who refreshes the page ten times can add ten. It is not a count of people and not for billing, and the service may make its rule stricter later, so the number could then be lower than before.
+- **It includes views reported by other platforms**, not only yours or the item's owner's.
+- **It is the service's number.** The SDK passes it on as it was sent and never formats, rounds, sums or adjusts it, and it does not add the views your page reports through `watchView`.
+- **It is required.** A page whose item has no `view_count`, or one that is not a whole number of 0 or more (text, `null`, a negative number, a fraction, more than the largest safe integer), is refused whole as a `contract_mismatch` error, with no items and nothing guessed.
+- **Code that builds `Item` values by hand** (your own tests or mocks) needs the field, because the exported type requires it.
+
 ### Search
 
 Add `q`, the words a visitor typed, to search the placement's items:
