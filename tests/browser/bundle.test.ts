@@ -104,6 +104,31 @@ describe("the built browser file", () => {
     expect(urls).toEqual([]);
   });
 
+  it("sends sort for a command queued before load and for a direct call after it", async () => {
+    const { urls, fn } = fakeFetch();
+    w.fetch = fn;
+    w.contentSdk = { q: [["fetchPage", "latest", { sort: "popular", limit: 5 }, () => {}]] };
+    loadScript(GOOD);
+    await new Promise((r) => setTimeout(r, 20));
+    await w.contentSdk?.fetchPage?.("latest", { sort: "oldest", cursor: "c" });
+    const sent = urls.map((u) => new URL(u).searchParams);
+    expect([sent[0].get("sort"), sent[0].get("limit")]).toEqual(["popular", "5"]);
+    expect([sent[1].get("sort"), sent[1].get("cursor")]).toEqual(["oldest", "c"]);
+  });
+
+  it("answers a bad sort, queued or direct, with a bad_query result naming sort and no request", async () => {
+    const { urls, fn } = fakeFetch();
+    w.fetch = fn;
+    const queued: unknown[] = [];
+    w.contentSdk = { q: [["fetchPage", "latest", { sort: "best" }, (r: unknown) => queued.push(r)]] };
+    loadScript(GOOD);
+    await new Promise((r) => setTimeout(r, 20));
+    const direct = await w.contentSdk?.fetchPage?.("latest", { sort: "" });
+    expect(queued).toEqual([expect.objectContaining({ ok: false, error: expect.objectContaining({ kind: "bad_query", fields: ["sort"] }) })]);
+    expect(direct).toMatchObject({ ok: false, error: { kind: "bad_query", fields: ["sort"] } });
+    expect(urls).toEqual([]);
+  });
+
   it("ignores a second load of the file with one warning", async () => {
     const warnings: string[] = [];
     const realWarn = console.warn;

@@ -74,6 +74,47 @@ function error(target: unknown, query?: unknown) {
   return r.error;
 }
 
+describe("buildRequestUrl: sort (spec 006)", () => {
+  it("sends no sort when it is absent or undefined, and adds no default", () => {
+    expect(url(t, {}).search).toBe("");
+    expect(url(t, { sort: undefined }).search).toBe("");
+    expect(url(t, { limit: 5 }).searchParams.has("sort")).toBe(false);
+  });
+
+  it.each([["popular"], ["newest"], ["oldest"]])("sends sort %s as it is", (sort) => {
+    expect(url(t, { sort }).search).toBe(`?sort=${sort}`);
+  });
+
+  it("sends sort after q and before the cursor, with every other field in its own form", () => {
+    const all = { limit: 10, tags: ["cars", "for_sale"], languages: ["am"], q: "toyota corolla", sort: "popular", cursor: "abc" };
+    expect(url(t, all).search).toBe("?limit=10&tag=cars%2Cfor_sale&language=am&q=toyota+corolla&sort=popular&cursor=abc");
+  });
+
+  it("builds the address 0.5.0 built when sort is not given", () => {
+    const query = { limit: 10, tags: ["cars"], languages: ["am"], q: "bike", cursor: "abc" };
+    expect(url(t, query).search).toBe("?limit=10&tag=cars&language=am&q=bike&cursor=abc");
+  });
+
+  it.each([["best"], ["Popular"], ["NEWEST"], [" popular"], ["popular "], [""], ["views"], ["popular,newest"], [5], [true], [null], [["popular"]], [{}], [Symbol("popular")]])(
+    "refuses sort %p, naming sort, with no address",
+    (sort) => {
+      const e = error(t, { sort });
+      expect(e.kind).toBe("bad_query");
+      expect(e.fields).toEqual(["sort"]);
+    },
+  );
+
+  it("refuses a sort whose conversion to text would throw, without calling it", () => {
+    const hostile = { toString: () => { throw new Error("must not be called"); } };
+    expect(error(t, { sort: hostile }).fields).toEqual(["sort"]);
+  });
+
+  it("reports the first problem the builder finds: limit before sort, sort before cursor", () => {
+    expect(error(t, { limit: 0, sort: "best" }).fields).toEqual(["limit"]);
+    expect(error(t, { sort: "best", cursor: 5 }).fields).toEqual(["sort"]);
+  });
+});
+
 describe("buildRequestUrl: refusals", () => {
   it.each([[0], [51], [1.5], [-1], [NaN], [Infinity], ["5"]])("refuses limit %p", (limit) => {
     const e = error(t, { limit });

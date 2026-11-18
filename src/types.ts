@@ -19,6 +19,15 @@ export interface Query {
    * `cursor`: a cursor belongs to the search it came from.
    */
   q?: string;
+  /**
+   * The order of the page: `popular`, `newest` or `oldest`, in lower case; anything else (an empty text
+   * included) is a `bad_query` error naming `sort`, with no request. Without it the service keeps its own
+   * order (newest first, best match first with `q`) and the SDK adds none. A cursor belongs to the order and
+   * the `q` that made it, so pass the same ones with it. With `q` and a `sort` only the matches come back,
+   * in that order. A `popular` list is ranked as of its first page, and a change in an item's view count
+   * between two pages can repeat or skip an item.
+   */
+  sort?: "popular" | "newest" | "oldest";
 }
 
 export interface Options {
