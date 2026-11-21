@@ -366,6 +366,68 @@ describe("the built browser file: reporting views and clicks", () => {
     }
   });
 
+  it("sends the eventId the platform gives, through the queue and the direct calls; a bad one is left out with one warning that never holds it (spec 009)", () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      w.contentSdk = { q: [["trackLinkClick", item, { eventId: "k-queued" }]] };
+      loadScript(GOOD);
+      const sdk = w.contentSdk as unknown as Sdk;
+      sdk.watchView?.({}, { externalRef: "telegram:addis_news/2" }, { eventId: "k-watch" });
+      FakeObserver.instances[0]?.emit(0.9);
+      jest.advanceTimersByTime(1000);
+      sdk.trackLinkClick?.(item, { eventId: "k-direct" });
+      sdk.trackLinkClick?.(item);
+      sdk.trackLinkClick?.(item);
+      warn.mockClear();
+      sdk.trackLinkClick?.(item, { eventId: "SECRET a/b" });
+      jest.advanceTimersByTime(5000);
+      const events = beacons.flatMap((b) => (JSON.parse(b.body) as { events: Record<string, unknown>[] }).events);
+      expect(events.map((e) => [e.kind, e.event_id])).toEqual([
+        ["link_click", "k-queued"], ["view", "k-watch"], ["link_click", "k-direct"], ["link_click", undefined], ["link_click", undefined], ["link_click", undefined],
+      ]);
+      expect(events.slice(3).every((e) => !("event_id" in e))).toBe(true);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).not.toContain("SECRET");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("makes no key of its own: a lifecycle with keys given and not given reads and writes no storage, cookie or random source (spec 009)", () => {
+    const touched: string[] = [];
+    const spies: { mockRestore: () => void }[] = [
+      jest.spyOn(Storage.prototype, "getItem").mockImplementation(() => (touched.push("getItem"), null)),
+      jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => void touched.push("setItem")),
+      jest.spyOn(Math, "random").mockImplementation(() => (touched.push("Math.random"), 0.5)),
+    ];
+    const cryptoLike = (globalThis as unknown as { crypto?: { getRandomValues?: unknown; randomUUID?: unknown } }).crypto;
+    if (cryptoLike !== undefined && typeof cryptoLike.getRandomValues === "function") {
+      spies.push(jest.spyOn(cryptoLike as { getRandomValues: (a: never) => never }, "getRandomValues").mockImplementation(((a: never) => (touched.push("getRandomValues"), a)) as never));
+    }
+    if (cryptoLike !== undefined && typeof cryptoLike.randomUUID === "function") {
+      spies.push(jest.spyOn(cryptoLike as { randomUUID: () => string }, "randomUUID").mockImplementation(() => (touched.push("randomUUID"), "x") as never));
+    }
+    Object.defineProperty(document, "cookie", { configurable: true, get: () => (touched.push("cookie get"), ""), set: () => void touched.push("cookie set") });
+    try {
+      w.contentSdk = { q: [] };
+      loadScript(GOOD);
+      touched.length = 0;
+      const sdk = w.contentSdk as unknown as Sdk;
+      sdk.watchView?.({}, item, { eventId: "k-1" });
+      FakeObserver.instances[0]?.emit(0.9);
+      jest.advanceTimersByTime(1000);
+      sdk.trackLinkClick?.(item);
+      sdk.trackLinkClick?.({ externalRef: "telegram:addis_news/1" }, { eventId: "k-2" });
+      jest.advanceTimersByTime(5000);
+      const events = beacons.flatMap((b) => (JSON.parse(b.body) as { events: Record<string, unknown>[] }).events);
+      expect(events.map((e) => e.event_id)).toEqual(["k-1", undefined, "k-2"]);
+      expect(touched).toEqual([]);
+    } finally {
+      delete (document as unknown as { cookie?: unknown }).cookie;
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+
   it("makes no session of its own: a whole lifecycle reads and writes no storage, cookie or random source (spec 005)", () => {
     const touched: string[] = [];
     const spies: { mockRestore: () => void }[] = [

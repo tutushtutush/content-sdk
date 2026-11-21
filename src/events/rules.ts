@@ -8,6 +8,7 @@ interface EventShared {
   placement_id?: string;
   actor_ref?: string;
   session_id?: string;
+  event_id?: string;
 }
 
 /** One event as the service takes it (its events contract): exactly one of `item_id` and `external_ref`. Optional keys are present only when kept. */
@@ -22,6 +23,7 @@ export interface Built {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EXTERNAL_REF = /^[A-Za-z0-9_.:/-]{1,128}$/;
+const EVENT_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 const PLACEMENT = /^[a-z0-9-]{3,40}$/;
 const ACTOR_MAX = 128;
 const SESSION_MAX = 128;
@@ -73,6 +75,7 @@ export function eventFor(kind: EventKind, item: unknown, options: unknown, now: 
   let placementId: unknown;
   let actorRef: unknown;
   let sessionId: unknown;
+  let eventId: unknown;
   if (options !== undefined) {
     if (!isRecord(options)) {
       warnings.push(`${PREFIX} The options must be an object; they were ignored.`);
@@ -92,6 +95,11 @@ export function eventFor(kind: EventKind, item: unknown, options: unknown, now: 
       } catch {
         warnings.push(`${PREFIX} sessionId could not be read; it was left out.`);
       }
+      try {
+        eventId = options.eventId;
+      } catch {
+        warnings.push(`${PREFIX} eventId could not be read; it was left out.`);
+      }
     }
   }
 
@@ -108,6 +116,13 @@ export function eventFor(kind: EventKind, item: unknown, options: unknown, now: 
   if (sessionId !== undefined && sessionId !== null) {
     if (isOpaqueText(sessionId, SESSION_MAX)) event.session_id = sessionId;
     else warnings.push(`${PREFIX} sessionId must be 1 to ${SESSION_MAX} characters of text with no NUL; it was left out.`);
+  }
+
+  // The platform's key for this one event (spec 009): sent as given, never made or kept here, and a bad one is left
+  // out and the event still sent (R3). The service stores one event per key; the SDK skips and merges nothing. null is none.
+  if (eventId !== undefined && eventId !== null) {
+    if (typeof eventId === "string" && EVENT_ID.test(eventId)) event.event_id = eventId;
+    else warnings.push(`${PREFIX} eventId must be 1 to 128 characters of A-Z, a-z, 0-9 and _ . : -; it was left out.`);
   }
 
   return { event, warnings };

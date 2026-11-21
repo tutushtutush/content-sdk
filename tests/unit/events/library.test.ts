@@ -165,3 +165,17 @@ describe("createLibrary with external references (spec 008)", () => {
     ]);
   });
 });
+
+describe("createLibrary with an eventId (spec 009)", () => {
+  it("sends it for a click and a watched view, and none when none is given", () => {
+    const { globals, beacons, fire } = page();
+    const library = createLibrary(globals);
+    library.trackLinkClick(target, item, { eventId: "k-1" });
+    library.trackLinkClick(target, { externalRef: "telegram:addis_news/1" }, { eventId: "k-2" });
+    library.trackLinkClick(target, item);
+    fire();
+    const events = beacons.flatMap((b) => (JSON.parse(b.body) as { events: Record<string, unknown>[] }).events);
+    expect(events.map((e) => e.event_id)).toEqual(["k-1", "k-2", undefined]);
+    expect(events[2]).not.toHaveProperty("event_id");
+  });
+});

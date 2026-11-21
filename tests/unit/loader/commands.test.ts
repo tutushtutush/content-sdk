@@ -146,6 +146,16 @@ describe("makeReporter, makeWatchView and makeTrackLinkClick (spec 004)", () => 
     expect(calls).toEqual([["watchView", element, item, options], ["trackLinkClick", item, options]]);
   });
 
+  it("hands an eventId among the options to the reporter unchanged (spec 009)", () => {
+    const { calls, reporter } = fakeReporter();
+    const element = {};
+    const item = { id: "i" };
+    const options = { placementId: "latest", eventId: "k-1" };
+    makeWatchView(reporter as never)(element, item, options);
+    makeTrackLinkClick(reporter as never)(item, options);
+    expect(calls).toEqual([["watchView", element, item, options], ["trackLinkClick", item, options]]);
+  });
+
   it("hands the options, a sessionId among them, to the reporter unchanged (spec 005)", () => {
     const { calls, reporter } = fakeReporter();
     const item = { id: "i" };

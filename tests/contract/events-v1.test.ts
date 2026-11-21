@@ -7,6 +7,7 @@ import { fakeEnv } from "../unit/events/helpers";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KIND = /^[a-z0-9_-]{1,32}$/;
 const EXTERNAL_REF = /^[A-Za-z0-9_.:/-]{1,128}$/;
+const EVENT_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 const PLACEMENT = /^[a-z0-9-]{3,40}$/;
 const ISO_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
 
@@ -30,6 +31,7 @@ function problemsOf(body: unknown): string[] {
     if (e.placement_id !== undefined && (typeof e.placement_id !== "string" || !PLACEMENT.test(e.placement_id))) problems.push(`${at}.placement_id`);
     if (e.actor_ref !== undefined && (typeof e.actor_ref !== "string" || [...e.actor_ref].length < 1 || [...e.actor_ref].length > 128 || e.actor_ref.includes("\u0000"))) problems.push(`${at}.actor_ref`);
     if (e.session_id !== undefined && e.session_id !== null && (typeof e.session_id !== "string" || [...e.session_id].length < 1 || [...e.session_id].length > 128 || e.session_id.includes("\u0000"))) problems.push(`${at}.session_id`);
+    if (e.event_id !== undefined && e.event_id !== null && (typeof e.event_id !== "string" || !EVENT_ID.test(e.event_id))) problems.push(`${at}.event_id`);
     if (e.occurred_at !== undefined && (typeof e.occurred_at !== "string" || !ISO_WITH_ZONE.test(e.occurred_at) || Number.isNaN(Date.parse(e.occurred_at)))) problems.push(`${at}.occurred_at`);
   });
   return problems;
@@ -39,7 +41,7 @@ const ID = "2f8b6c1e-3b0d-4d8a-9a9e-5a4f1b7c2d10";
 // The example of the contract, as written there.
 const contractExample = {
   platform_id: "listings",
-  events: [{ item_id: ID, kind: "view", placement_id: "home", actor_ref: "device-abc", session_id: "s-7f3a91c2", occurred_at: "2026-11-17T08:00:00Z" }],
+  events: [{ item_id: ID, kind: "view", placement_id: "home", actor_ref: "device-abc", session_id: "s-7f3a91c2", event_id: "5b2f0c4e-9d1a-4e0b-8f7a-3c1d2e4f5a6b", occurred_at: "2026-11-17T08:00:00Z" }],
 };
 
 describe("the validator itself", () => {
@@ -68,6 +70,12 @@ describe("the validator itself", () => {
     ["an external_ref with a space", { platform_id: "x", events: [{ external_ref: "a b", kind: "view" }] }],
     ["an external_ref with an accent", { platform_id: "x", events: [{ external_ref: "é", kind: "view" }] }],
     ["an external_ref that is a number", { platform_id: "x", events: [{ external_ref: 7, kind: "view" }] }],
+    ["an empty event_id", { platform_id: "x", events: [{ item_id: ID, kind: "view", event_id: "" }] }],
+    ["a 129-character event_id", { platform_id: "x", events: [{ item_id: ID, kind: "view", event_id: "x".repeat(129) }] }],
+    ["an event_id with a space", { platform_id: "x", events: [{ item_id: ID, kind: "view", event_id: "a b" }] }],
+    ["an event_id with a slash", { platform_id: "x", events: [{ item_id: ID, kind: "view", event_id: "a/b" }] }],
+    ["an event_id with an accent", { platform_id: "x", events: [{ item_id: ID, kind: "view", event_id: "é" }] }],
+    ["an event_id that is a number", { platform_id: "x", events: [{ item_id: ID, kind: "view", event_id: 7 }] }],
     ["an occurred_at with no zone", { platform_id: "x", events: [{ item_id: ID, kind: "view", occurred_at: "2026-11-17T08:00:00" }] }],
   ])("refuses %s", (_name, body) => {
     expect(problemsOf(body).length).toBeGreaterThan(0);
@@ -138,6 +146,23 @@ describe("every payload the SDK builds meets the events contract", () => {
     expect(events).toHaveLength(5);
     expect(events.map((e) => ["item_id" in e, "external_ref" in e])).toEqual([[true, false], [false, true], [false, true], [false, true], [false, true]]);
     expect(events[3]?.external_ref).toBe("Telegram:Case_Kept");
+  });
+
+  it("with and without an eventId, for items and references: the key is present only when a valid one was given, and the body meets the contract", () => {
+    const f = fakeEnv();
+    const reporter = createReporter(target, f.env);
+    reporter.trackLinkClick({ id: ID }, { eventId: "5b2f0c4e-9d1a-4e0b-8f7a-3c1d2e4f5a6b" });
+    reporter.trackLinkClick({ externalRef: "telegram:addis_news/10234" }, { eventId: "x".repeat(128), placementId: "telegram", sessionId: "s-1", actorRef: "d" });
+    reporter.trackLinkClick({ id: ID });
+    reporter.trackLinkClick({ id: ID }, { eventId: null });
+    for (const bad of ["", "x".repeat(129), "a b", "a/b", "é", "a\u0000b", 7, {}]) reporter.trackLinkClick({ id: ID }, { eventId: bad });
+    f.clock.advance(2000);
+    const sent = bodies(f);
+    expect(sent).toHaveLength(1);
+    expect(problemsOf(sent[0])).toEqual([]);
+    const events = (sent[0] as { events: Record<string, unknown>[] }).events;
+    expect(events).toHaveLength(12);
+    expect(events.map((e) => "event_id" in e)).toEqual([true, true, ...Array<boolean>(10).fill(false)]);
   });
 
   it("for 50 events in one request, and for the 51st in the next", () => {
