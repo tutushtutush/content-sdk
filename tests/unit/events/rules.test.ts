@@ -320,3 +320,105 @@ describe("eventFor: external references (spec 008)", () => {
     expect(built.warnings).toHaveLength(3);
   });
 });
+
+// Spec 009: the platform's own key for one event.
+describe("eventFor: eventId (spec 009)", () => {
+  const KEY = "5b2f0c4e-9d1a-4e0b-8f7a-3c1d2e4f5a6b";
+  const REF = "telegram:addis_news/10234";
+  const NOWISO = "2026-11-17T08:00:00.123Z";
+
+  it("sends a valid key as event_id for an item and for a reference, view and link_click", () => {
+    for (const kind of ["view", "link_click"] as const) {
+      expect(eventFor(kind, item, { eventId: KEY }, NOW)).toEqual({ event: { kind, item_id: ID, occurred_at: NOWISO, event_id: KEY }, warnings: [] });
+      expect(eventFor(kind, { externalRef: REF }, { eventId: KEY }, NOW)).toEqual({ event: { kind, external_ref: REF, occurred_at: NOWISO, event_id: KEY }, warnings: [] });
+    }
+  });
+
+  it.each(["k", "Post-42", "view:telegram:addis_news.10234:k7", "a_b.c:d-e", "0", "x".repeat(128), "A", "a"])("keeps %s as given", (key) => {
+    expect(eventFor("view", item, { eventId: key }, NOW).event?.event_id).toBe(key);
+  });
+
+  it("keeps two keys that differ only in case apart", () => {
+    expect(eventFor("view", item, { eventId: "Key" }, NOW).event?.event_id).toBe("Key");
+    expect(eventFor("view", item, { eventId: "key" }, NOW).event?.event_id).toBe("key");
+  });
+
+  it("sits beside the other options and none affects another; equal to sessionId or actorRef is allowed", () => {
+    const all = eventFor("view", item, { placementId: "latest", actorRef: "d", sessionId: "s-1", eventId: KEY }, NOW).event;
+    expect(all).toEqual({ kind: "view", item_id: ID, occurred_at: NOWISO, placement_id: "latest", actor_ref: "d", session_id: "s-1", event_id: KEY });
+    const same = eventFor("view", item, { actorRef: "x", sessionId: "x", eventId: "x" }, NOW).event;
+    expect(same).toMatchObject({ actor_ref: "x", session_id: "x", event_id: "x" });
+  });
+
+  const SECRET = "SECRET-VALUE";
+  it.each([
+    ["empty", ""],
+    ["129 characters", "x".repeat(129)],
+    ["129 emoji", "😀".repeat(129)],
+    ["with a space", "a b"],
+    ["with a slash", "a/b"],
+    ["with an accented letter", "é"],
+    ["with an emoji", "😀"],
+    ["with a NUL", "a\u0000b"],
+    ["with a trailing newline", "a\n"],
+    ["with a character outside the set", `${SECRET}#`],
+    ["a number", 7],
+    ["a boolean", true],
+    ["an object", { toString: () => SECRET }],
+    ["a list", [SECRET]],
+    ["a function", () => SECRET],
+    ["a symbol", Symbol(SECRET)],
+  ])("leaves out an eventId that is %s, with one warning that never holds the value, and still builds the event", (_name, bad) => {
+    for (const subject of [item, { externalRef: REF }]) {
+      const built = eventFor("view", subject, { eventId: bad }, NOW);
+      expect(built.event).toBeDefined();
+      expect("event_id" in (built.event ?? {})).toBe(false);
+      expect(built.warnings).toEqual(["[content-sdk] eventId must be 1 to 128 characters of A-Z, a-z, 0-9 and _ . : -; it was left out."]);
+      expect(built.warnings[0]).not.toContain(SECRET);
+    }
+  });
+
+  it("leaves out an eventId whose getter throws, with one warning", () => {
+    const options = {
+      get eventId(): string {
+        throw new Error("boom");
+      },
+    };
+    const built = eventFor("view", item, options, NOW);
+    expect(built.event).toEqual({ kind: "view", item_id: ID, occurred_at: NOWISO });
+    expect(built.warnings).toEqual(["[content-sdk] eventId could not be read; it was left out."]);
+  });
+
+  it("is independent of the other options: a bad key does not change them, and a bad one of them does not change a good key", () => {
+    const a = eventFor("view", item, { eventId: "a b", placementId: "latest", sessionId: "s-1" }, NOW);
+    expect(a.event).toEqual({ kind: "view", item_id: ID, occurred_at: NOWISO, placement_id: "latest", session_id: "s-1" });
+    expect(a.warnings).toHaveLength(1);
+    const b = eventFor("view", item, { eventId: KEY, placementId: "X", actorRef: "", sessionId: "" }, NOW);
+    expect(b.event).toEqual({ kind: "view", item_id: ID, occurred_at: NOWISO, event_id: KEY });
+    expect(b.warnings).toHaveLength(3);
+  });
+
+  it("reads no eventId from options that are not an object, and keeps the one existing warning", () => {
+    const built = eventFor("view", item, KEY, NOW);
+    expect(built.event?.event_id).toBeUndefined();
+    expect(built.warnings).toEqual(["[content-sdk] The options must be an object; they were ignored."]);
+  });
+
+  it.each([
+    ["no options", undefined],
+    ["empty options", {}],
+    ["an undefined eventId", { eventId: undefined }],
+    ["a null eventId", { eventId: null }],
+  ])("builds exactly what v0.8.0 built, with no event_id key and no warning, for %s", (_name, options) => {
+    const asItem = eventFor("link_click", item, options, NOW);
+    expect(asItem).toEqual({ event: { kind: "link_click", item_id: ID, occurred_at: NOWISO }, warnings: [] });
+    expect(JSON.stringify(asItem.event)).toBe(`{"kind":"link_click","item_id":"${ID}","occurred_at":"${NOWISO}"}`);
+    const asRef = eventFor("link_click", { externalRef: REF }, options, NOW);
+    expect(JSON.stringify(asRef.event)).toBe(`{"kind":"link_click","external_ref":"${REF}","occurred_at":"${NOWISO}"}`);
+    expect(asRef.warnings).toEqual([]);
+  });
+
+  it("still warns about actorRef: null, as v0.8.0 does", () => {
+    expect(eventFor("view", item, { actorRef: null }, NOW).warnings).toEqual(["[content-sdk] actorRef must be 1 to 128 characters of text; it was left out."]);
+  });
+});

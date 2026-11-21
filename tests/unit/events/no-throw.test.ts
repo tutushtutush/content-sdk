@@ -187,3 +187,26 @@ describe("never throws for a hostile externalRef (spec 008)", () => {
     expect(() => f.clock.advance(200_000)).not.toThrow();
   });
 });
+
+describe("never throws for a hostile eventId (spec 009)", () => {
+  const cyclic: Record<string, unknown> = {};
+  cyclic.self = cyclic;
+  const proxy = new Proxy({}, { get: throwing, has: throwing, ownKeys: throwing, getPrototypeOf: throwing });
+  it.each([
+    ["a getter that throws", { get eventId(): string { throw new Error("boom"); } }],
+    ["a proxy that throws", { eventId: proxy }],
+    ["a symbol", { eventId: Symbol("x") }],
+    ["a bigint", { eventId: BigInt(5) }],
+    ["a huge string", { eventId: "x".repeat(1_000_000) }],
+    ["a cyclic object", { eventId: cyclic }],
+    ["frozen options", Object.freeze({ eventId: "a b" })],
+    ["a proxy as the options", proxy],
+  ])("watchView and trackLinkClick with %s", (_name, opts) => {
+    const f = fakeEnv();
+    const reporter = createReporter(target, f.env);
+    expect(() => (reporter.watchView({}, good, opts) as () => void)()).not.toThrow();
+    expect(() => reporter.trackLinkClick(good, opts)).not.toThrow();
+    expect(() => f.clock.advance(200_000)).not.toThrow();
+    expect(f.beacons.length).toBeGreaterThan(0);
+  });
+});

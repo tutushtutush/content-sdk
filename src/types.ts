@@ -105,6 +105,8 @@ export interface ViewOptions {
   actorRef?: string;
   /** The visit the event belongs to, chosen by the platform: 1 to 128 characters of text with no NUL. The SDK makes none and stores none. */
   sessionId?: string;
+  /** This event's key, chosen by the platform: 1 to 128 characters of A-Z, a-z, 0-9 and _ . : - (no slash). The SDK makes none and keeps none. */
+  eventId?: string;
 }
 
 /**

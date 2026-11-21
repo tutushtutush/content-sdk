@@ -351,3 +351,74 @@ describe("reporter with external references (spec 008)", () => {
     expect(sent()[0]?.events).toEqual([{ kind: "link_click", external_ref: REF, occurred_at: expect.any(String) }]);
   });
 });
+
+describe("reporter with an eventId (spec 009)", () => {
+  const KEY = "5b2f0c4e-9d1a-4e0b-8f7a-3c1d2e4f5a6b";
+  const REF = "telegram:addis_news/10234";
+
+  it("sends a click and a seen view with event_id, for an item and for a reference", () => {
+    const { f, reporter, sent, see } = setup();
+    reporter.trackLinkClick(item, { eventId: "k-1" });
+    reporter.trackLinkClick({ externalRef: REF }, { eventId: "k-2" });
+    reporter.watchView(element, item, { eventId: "k-3" });
+    see();
+    reporter.watchView(element, { externalRef: REF }, { eventId: "k-4" });
+    see(1);
+    f.clock.advance(2000);
+    expect(sent().flatMap((body) => body.events).map((e) => [e.kind, e.event_id])).toEqual([["link_click", "k-1"], ["link_click", "k-2"], ["view", "k-3"], ["view", "k-4"]]);
+  });
+
+  it("sends the same key on two calls as two events, both with it: the SDK deduplicates nothing", () => {
+    const { f, reporter, sent } = setup();
+    reporter.trackLinkClick(item, { eventId: KEY });
+    reporter.trackLinkClick(item, { eventId: KEY });
+    f.clock.advance(2000);
+    expect(sent()[0]?.events.map((e) => e.event_id)).toEqual([KEY, KEY]);
+  });
+
+  it("sends 50 events across 5 keys, each with the key of its own call", () => {
+    const { f, reporter, sent } = setup();
+    for (let n = 0; n < 50; n++) {
+      const options = { eventId: `key-${n % 5}` };
+      if (n % 2 === 0) reporter.trackLinkClick(item, options);
+      else reporter.trackLinkClick({ externalRef: `ref-${n}` }, options);
+    }
+    f.clock.advance(2000);
+    const events = sent()[0]?.events ?? [];
+    expect(events).toHaveLength(50);
+    events.forEach((e, n) => expect(e.event_id).toBe(`key-${n % 5}`));
+  });
+
+  it("remembers nothing: a call with a key then one with none; the same item twice with no key is two events", () => {
+    const { f, reporter, sent } = setup();
+    reporter.trackLinkClick(item, { eventId: "k-1" });
+    reporter.trackLinkClick(item);
+    reporter.trackLinkClick(item);
+    f.clock.advance(2000);
+    const events = sent()[0]?.events ?? [];
+    expect(events).toHaveLength(3);
+    expect(events.map((e) => "event_id" in e)).toEqual([true, false, false]);
+  });
+
+  it("shares nothing between two reporters", () => {
+    const a = setup();
+    const b = setup();
+    a.reporter.trackLinkClick(item, { eventId: "k-a" });
+    b.reporter.trackLinkClick(item);
+    a.f.clock.advance(2000);
+    b.f.clock.advance(2000);
+    expect(a.sent()[0]?.events[0]?.event_id).toBe("k-a");
+    expect(b.sent()[0]?.events[0]).not.toHaveProperty("event_id");
+  });
+
+  it("still sends the event, without the key, and warns once without the value, for a bad key; the batch goes whole", () => {
+    const { f, reporter, sent } = setup();
+    reporter.trackLinkClick(item, { eventId: "SECRET a/b" });
+    reporter.trackLinkClick(item, { eventId: KEY });
+    f.clock.advance(2000);
+    expect(f.warnings).toHaveLength(1);
+    expect(f.warnings[0]).not.toContain("SECRET");
+    expect(sent()[0]?.events.map((e) => e.event_id)).toEqual([undefined, KEY]);
+    expect(sent()[0]?.events[0]).not.toHaveProperty("event_id");
+  });
+});

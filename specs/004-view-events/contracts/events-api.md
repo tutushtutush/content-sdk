@@ -62,6 +62,8 @@ The optional `sessionId` (the visit, supplied by the platform) was added in vers
 
 An item may also be `{ externalRef }` instead of `{ id }`, from version 0.8.0 (spec 008, [events-api-delta](../../008-external-ref-events/contracts/events-api-delta.md)), which amends this page.
 
+An optional `eventId` (the platform's key for one event, sent as `event_id`) is offered from version 0.9.0 (spec 009, [events-api-delta](../../009-event-id/contracts/events-api-delta.md)), which amends this page.
+
 ## Not in this version
 
 A generic `reportEvent`, a tag attribute for the actor reference, retries, deduplication, remembering the placement.
