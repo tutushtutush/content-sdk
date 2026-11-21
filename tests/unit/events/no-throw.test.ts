@@ -163,3 +163,27 @@ describe("never throws, whatever sessionId the platform passes (spec 005)", () =
     expect(f.beacons.length).toBeGreaterThan(0);
   });
 });
+
+describe("never throws for a hostile externalRef (spec 008)", () => {
+  const hostileRef = (value: unknown) => ({ get externalRef() { if (value === "throw") throw new Error("boom"); return value; } });
+  const cyclic: Record<string, unknown> = {};
+  cyclic.self = cyclic;
+  const proxy = new Proxy({}, { get: throwing, has: throwing, ownKeys: throwing, getPrototypeOf: throwing });
+  it.each([
+    ["a getter that throws", hostileRef("throw")],
+    ["a proxy that throws", { externalRef: proxy }],
+    ["a symbol", { externalRef: Symbol("x") }],
+    ["a bigint", { externalRef: BigInt(5) }],
+    ["a huge string", { externalRef: "x".repeat(1_000_000) }],
+    ["a cyclic object", { externalRef: cyclic }],
+    ["a frozen item", Object.freeze({ externalRef: "a b" })],
+    ["a proxy item", proxy],
+    ["both fields hostile", { id: proxy, externalRef: proxy }],
+  ])("watchView and trackLinkClick with %s", (_name, item) => {
+    const f = fakeEnv();
+    const reporter = createReporter(target, f.env);
+    expect(() => (reporter.watchView({}, item) as () => void)()).not.toThrow();
+    expect(() => reporter.trackLinkClick(item)).not.toThrow();
+    expect(() => f.clock.advance(200_000)).not.toThrow();
+  });
+});

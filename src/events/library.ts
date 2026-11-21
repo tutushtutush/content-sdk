@@ -1,13 +1,13 @@
-import type { ReportTarget, ViewOptions } from "../types";
+import type { ReportedItem, ReportTarget, ViewOptions } from "../types";
 import { isRecord } from "../guards";
 import { pageEnv, type PageGlobals } from "./page-env";
 import { createReporter, type Reporter } from "./reporter";
 
 export interface Library {
   /** Reports one `view` of the item when the element has been seen on screen; returns `stop`. Never throws. */
-  watchView(target: ReportTarget, element: object, item: { id: string }, options?: ViewOptions): () => void;
+  watchView(target: ReportTarget, element: object, item: ReportedItem, options?: ViewOptions): () => void;
   /** Reports one `link_click` of the item. Never throws. */
-  trackLinkClick(target: ReportTarget, item: { id: string }, options?: ViewOptions): void;
+  trackLinkClick(target: ReportTarget, item: ReportedItem, options?: ViewOptions): void;
 }
 
 /**

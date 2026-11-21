@@ -148,3 +148,20 @@ describe("createLibrary", () => {
     expect(warnings).toHaveLength(1);
   });
 });
+
+describe("createLibrary with external references (spec 008)", () => {
+  const REF = "telegram:addis_news/10234";
+
+  it("sends a reference event for a click and for a watched view, and item calls are as before", () => {
+    const { globals, beacons, fire } = page();
+    const library = createLibrary(globals);
+    library.trackLinkClick(target, { externalRef: REF }, { placementId: "telegram" });
+    library.trackLinkClick(target, item);
+    fire();
+    const events = beacons.flatMap((b) => (JSON.parse(b.body) as { events: Record<string, unknown>[] }).events);
+    expect(events).toEqual([
+      { kind: "link_click", external_ref: REF, occurred_at: expect.any(String), placement_id: "telegram" },
+      { kind: "link_click", item_id: ID, occurred_at: expect.any(String) },
+    ]);
+  });
+});

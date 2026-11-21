@@ -2,15 +2,18 @@ import { isRecord } from "../guards";
 
 export type EventKind = "view" | "link_click";
 
-/** One event as the service takes it (its events contract). Optional keys are present only when kept. */
-export interface EventRecord {
+interface EventShared {
   kind: EventKind;
-  item_id: string;
   occurred_at: string;
   placement_id?: string;
   actor_ref?: string;
   session_id?: string;
 }
+
+/** One event as the service takes it (its events contract): exactly one of `item_id` and `external_ref`. Optional keys are present only when kept. */
+export type EventRecord =
+  | (EventShared & { item_id: string; external_ref?: never })
+  | (EventShared & { external_ref: string; item_id?: never });
 
 export interface Built {
   event: EventRecord | undefined;
@@ -18,6 +21,7 @@ export interface Built {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EXTERNAL_REF = /^[A-Za-z0-9_.:/-]{1,128}$/;
 const PLACEMENT = /^[a-z0-9-]{3,40}$/;
 const ACTOR_MAX = 128;
 const SESSION_MAX = 128;
@@ -35,17 +39,36 @@ function isOpaqueText(value: unknown, max: number): value is string {
 export function eventFor(kind: EventKind, item: unknown, options: unknown, now: number): Built {
   const warnings: string[] = [];
 
+  // An item names one thing: a content-api item by `id`, or something the platform keeps itself by `externalRef`.
+  // null counts as not given, as the service counts it (spec 008, R1).
   let id: unknown;
+  let externalRef: unknown;
   try {
-    id = isRecord(item) ? item.id : undefined;
+    if (isRecord(item)) {
+      id = item.id;
+      externalRef = item.externalRef;
+    }
   } catch {
     return { event: undefined, warnings: [`${PREFIX} The item could not be read; no ${kind} event was recorded.`] };
   }
-  if (typeof id !== "string" || !UUID.test(id)) {
-    return { event: undefined, warnings: [`${PREFIX} The item needs an id that is a UUID, as fetchPage returns it; no ${kind} event was recorded.`] };
-  }
+  const hasId = id !== undefined && id !== null;
+  const hasRef = externalRef !== undefined && externalRef !== null;
+  const occurredAt = new Date(now).toISOString();
 
-  const event: EventRecord = { kind, item_id: id, occurred_at: new Date(now).toISOString() };
+  let event: EventRecord;
+  if (hasId && hasRef) {
+    return { event: undefined, warnings: [`${PREFIX} The item needs exactly one of id and externalRef, not both; no ${kind} event was recorded.`] };
+  } else if (hasRef) {
+    if (typeof externalRef !== "string" || !EXTERNAL_REF.test(externalRef)) {
+      return { event: undefined, warnings: [`${PREFIX} externalRef must be 1 to 128 characters of A-Z, a-z, 0-9 and _ . : / -; no ${kind} event was recorded.`] };
+    }
+    event = { kind, external_ref: externalRef, occurred_at: occurredAt };
+  } else {
+    if (typeof id !== "string" || !UUID.test(id)) {
+      return { event: undefined, warnings: [`${PREFIX} The item needs an id that is a UUID, as fetchPage returns it, or an externalRef; no ${kind} event was recorded.`] };
+    }
+    event = { kind, item_id: id, occurred_at: occurredAt };
+  }
 
   let placementId: unknown;
   let actorRef: unknown;
