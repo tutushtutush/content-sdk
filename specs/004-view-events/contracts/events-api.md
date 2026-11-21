@@ -66,4 +66,4 @@ An optional `eventId` (the platform's key for one event, sent as `event_id`) is 
 
 ## Not in this version
 
-A generic `reportEvent`, a tag attribute for the actor reference, retries, deduplication, remembering the placement.
+A generic `reportEvent`, a tag attribute for the actor reference, retries, deduplication by the SDK itself (the service deduplicates by an `event_id` the platform sends, offered as `eventId` from version 0.9.0), remembering the placement.
