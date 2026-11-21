@@ -303,3 +303,51 @@ describe("the session id (spec 005)", () => {
     expect(second.sent()[0]?.events[0]).not.toHaveProperty("session_id");
   });
 });
+
+describe("reporter with external references (spec 008)", () => {
+  const REF = "telegram:addis_news/10234";
+
+  it("sends a link click with external_ref, the options and no item_id", () => {
+    const { f, reporter, sent } = setup();
+    reporter.trackLinkClick({ externalRef: REF }, { placementId: "telegram", sessionId: "s-1" });
+    f.clock.advance(2000);
+    expect(sent()[0]?.events).toEqual([{ kind: "link_click", external_ref: REF, occurred_at: expect.any(String), placement_id: "telegram", session_id: "s-1" }]);
+  });
+
+  it("sends a view with external_ref once seen, by the same rule as for an item", () => {
+    const { f, reporter, sent, see } = setup();
+    reporter.watchView(element, { externalRef: REF });
+    f.clock.advance(5000);
+    expect(f.beacons).toEqual([]);
+    see();
+    f.clock.advance(2000);
+    expect(sent()[0]?.events).toEqual([{ kind: "view", external_ref: REF, occurred_at: expect.any(String) }]);
+  });
+
+  it("keeps item and reference events apart in one batch: 50 mixed calls, each with exactly one identifying key", () => {
+    const { f, reporter, sent } = setup();
+    for (let n = 0; n < 50; n++) {
+      if (n % 2 === 0) reporter.trackLinkClick({ id: ID });
+      else reporter.trackLinkClick({ externalRef: `ref-${n}` });
+    }
+    f.clock.advance(2000);
+    const events = sent()[0]?.events ?? [];
+    expect(events).toHaveLength(50);
+    events.forEach((e, n) => {
+      expect(["item_id" in e, "external_ref" in e]).toEqual(n % 2 === 0 ? [true, false] : [false, true]);
+      if (n % 2 === 1) expect(e.external_ref).toBe(`ref-${n}`);
+    });
+  });
+
+  it("sends nothing and warns once for a bad reference, and the good events of the batch still go", () => {
+    const { f, reporter, sent } = setup();
+    reporter.trackLinkClick({ externalRef: "SECRET b" });
+    reporter.trackLinkClick({ externalRef: REF });
+    reporter.trackLinkClick({ id: ID, externalRef: REF });
+    reporter.trackLinkClick({});
+    f.clock.advance(2000);
+    expect(f.warnings).toHaveLength(3);
+    f.warnings.forEach((w) => expect(w).not.toContain("SECRET"));
+    expect(sent()[0]?.events).toEqual([{ kind: "link_click", external_ref: REF, occurred_at: expect.any(String) }]);
+  });
+});

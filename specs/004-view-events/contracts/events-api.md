@@ -60,6 +60,8 @@ One request per flush to `POST {baseUrl}/api/v1/events`, `text/plain`, body:
 
 The optional `sessionId` (the visit, supplied by the platform) was added in version 0.5.0: see [events-api-delta](../../005-session-id/contracts/events-api-delta.md), which amends this page.
 
+An item may also be `{ externalRef }` instead of `{ id }`, from version 0.8.0 (spec 008, [events-api-delta](../../008-external-ref-events/contracts/events-api-delta.md)), which amends this page.
+
 ## Not in this version
 
 A generic `reportEvent`, a tag attribute for the actor reference, retries, deduplication, remembering the placement.

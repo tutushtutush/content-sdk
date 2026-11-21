@@ -106,3 +106,10 @@ export interface ViewOptions {
   /** The visit the event belongs to, chosen by the platform: 1 to 128 characters of text with no NUL. The SDK makes none and stores none. */
   sessionId?: string;
 }
+
+/**
+ * What a reported view or click is about: an item of content-api (its `id`, as `fetchPage` returns it) or
+ * something the platform keeps itself, named by an `externalRef` it chose (1 to 128 characters of
+ * `A-Za-z0-9_.:/-`, public identifiers only). Exactly one of the two.
+ */
+export type ReportedItem = { id: string; externalRef?: never } | { externalRef: string; id?: never };

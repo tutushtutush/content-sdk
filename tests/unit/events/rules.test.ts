@@ -212,3 +212,111 @@ describe("eventFor: the session id (spec 005)", () => {
     expect(built.warnings).toEqual(["[content-sdk] actorRef must be 1 to 128 characters of text; it was left out."]);
   });
 });
+
+// Spec 008: an item may name something the platform keeps itself, by an externalRef.
+describe("eventFor: external references (spec 008)", () => {
+  const REF = "telegram:addis_news/10234";
+  const NOWISO = "2026-11-17T08:00:00.123Z";
+
+  it("builds a reference event with external_ref and no item_id, for a view and a link_click", () => {
+    for (const kind of ["view", "link_click"] as const) {
+      const built = eventFor(kind, { externalRef: REF }, undefined, NOW);
+      expect(built).toEqual({ event: { kind, external_ref: REF, occurred_at: NOWISO }, warnings: [] });
+      expect("item_id" in (built.event ?? {})).toBe(false);
+      expect(JSON.stringify(built.event)).toBe(`{"kind":"${kind}","external_ref":"${REF}","occurred_at":"${NOWISO}"}`);
+    }
+  });
+
+  it("keeps the reference as given: case, punctuation, digits and exactly 128 characters", () => {
+    for (const ref of ["Telegram:A_b.C/d-9", "a", "x".repeat(128), "0", ".:/-_"]) {
+      expect(eventFor("view", { externalRef: ref }, undefined, NOW).event).toMatchObject({ external_ref: ref });
+    }
+  });
+
+  it("works with the options as for an item, sends no placement it was not given, and no event_id", () => {
+    const withAll = eventFor("view", { externalRef: REF }, { placementId: "telegram", actorRef: "d", sessionId: "s-1" }, NOW).event;
+    expect(withAll).toEqual({ kind: "view", external_ref: REF, occurred_at: NOWISO, placement_id: "telegram", actor_ref: "d", session_id: "s-1" });
+    const none = eventFor("view", { externalRef: REF }, {}, NOW).event;
+    expect(Object.keys(none ?? {}).sort()).toEqual(["external_ref", "kind", "occurred_at"]);
+  });
+
+  const SECRET = "SECRET-VALUE";
+  it.each([
+    ["empty", ""],
+    ["129 characters", "x".repeat(129)],
+    ["with a space", "a b"],
+    ["with an accented letter", "é"],
+    ["with an emoji", "😀"],
+    ["with a NUL", "a\u0000b"],
+    ["with a trailing newline", "a\n"],
+    ["with a character outside the set", `${SECRET}#`],
+    ["a number", 7],
+    ["a boolean", true],
+    ["an object", { toString: () => SECRET }],
+    ["a list", [SECRET]],
+    ["a function", () => SECRET],
+    ["a symbol", Symbol(SECRET)],
+  ])("gives no event and one warning without the value for an externalRef that is %s", (_name, bad) => {
+    const built = eventFor("view", { externalRef: bad }, undefined, NOW);
+    expect(built.event).toBeUndefined();
+    expect(built.warnings).toHaveLength(1);
+    expect(built.warnings[0]).toMatch(/^\[content-sdk\] externalRef must be 1 to 128 characters/);
+    expect(built.warnings[0]).not.toContain(SECRET);
+  });
+
+  it("gives one warning when reading externalRef throws", () => {
+    const hostile = {
+      get externalRef(): string {
+        throw new Error("boom");
+      },
+    };
+    const built = eventFor("view", hostile, undefined, NOW);
+    expect(built.event).toBeUndefined();
+    expect(built.warnings).toHaveLength(1);
+  });
+
+  it.each([
+    ["a UUID id", { id: ID, externalRef: REF }],
+    ["an id that is not a UUID", { id: "abc", externalRef: REF }],
+    ["an empty id", { id: "", externalRef: REF }],
+    ["a number as id", { id: 5, externalRef: REF }],
+    ["a bad reference too", { id: ID, externalRef: "a b" }],
+  ])("refuses an item with both, with %s: no event, one warning, no value", (_name, both) => {
+    const built = eventFor("view", both, undefined, NOW);
+    expect(built.event).toBeUndefined();
+    expect(built.warnings).toHaveLength(1);
+    expect(built.warnings[0]).toContain("not both");
+    expect(built.warnings[0]).not.toContain(REF);
+  });
+
+  it.each([
+    ["nothing", {}],
+    ["other keys only", { title: "Bike" }],
+    ["undefined for both", { id: undefined, externalRef: undefined }],
+    ["null for both", { id: null, externalRef: null }],
+  ])("refuses an item with neither (%s): no event, one warning", (_name, neither) => {
+    const built = eventFor("view", neither, undefined, NOW);
+    expect(built.event).toBeUndefined();
+    expect(built.warnings).toHaveLength(1);
+    expect(built.warnings[0]).toContain("externalRef");
+  });
+
+  it("counts null as not given, for either field", () => {
+    expect(eventFor("view", { id: null, externalRef: REF }, undefined, NOW).event).toMatchObject({ external_ref: REF });
+    expect(eventFor("view", { id: ID, externalRef: null }, undefined, NOW).event).toMatchObject({ item_id: ID });
+  });
+
+  it("keeps the item refusal for a bad id alone, and the item event as v0.7.0 built it, extra keys included", () => {
+    expect(eventFor("view", { id: "abc" }, undefined, NOW).event).toBeUndefined();
+    const fetched = { id: ID, title: "Bike", view_count: 3 };
+    const built = eventFor("view", fetched, undefined, NOW);
+    expect(JSON.stringify(built.event)).toBe(`{"kind":"view","item_id":"${ID}","occurred_at":"${NOWISO}"}`);
+    expect(built.warnings).toEqual([]);
+  });
+
+  it("has options warnings as before for a reference event", () => {
+    const built = eventFor("view", { externalRef: REF }, { placementId: "X", actorRef: "", sessionId: "" }, NOW);
+    expect(built.event).toEqual({ kind: "view", external_ref: REF, occurred_at: NOWISO });
+    expect(built.warnings).toHaveLength(3);
+  });
+});

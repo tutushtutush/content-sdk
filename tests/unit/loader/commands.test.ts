@@ -136,6 +136,16 @@ describe("makeReporter, makeWatchView and makeTrackLinkClick (spec 004)", () => 
     expect(calls).toEqual([["watchView", element, item, options], ["trackLinkClick", item, options]]);
   });
 
+  it("passes an item with an externalRef and the options on to the reporter unchanged (spec 008)", () => {
+    const { calls, reporter } = fakeReporter();
+    const element = {};
+    const item = { externalRef: "telegram:addis_news/10234" };
+    const options = { placementId: "telegram", sessionId: "s-1" };
+    makeWatchView(reporter as never)(element, item, options);
+    makeTrackLinkClick(reporter as never)(item, options);
+    expect(calls).toEqual([["watchView", element, item, options], ["trackLinkClick", item, options]]);
+  });
+
   it("hands the options, a sessionId among them, to the reporter unchanged (spec 005)", () => {
     const { calls, reporter } = fakeReporter();
     const item = { id: "i" };

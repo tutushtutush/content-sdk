@@ -338,6 +338,34 @@ describe("the built browser file: reporting views and clicks", () => {
     expect(events[3]).not.toHaveProperty("session_id");
   });
 
+  it("sends external_ref for a reference, through the queue and the direct calls, and refuses a bad or ambiguous item with one warning each (spec 008)", () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      w.contentSdk = { q: [["trackLinkClick", { externalRef: "telegram:addis_news/1" }, { placementId: "telegram" }]] };
+      loadScript(GOOD);
+      const sdk = w.contentSdk as unknown as Sdk;
+      sdk.watchView?.({}, { externalRef: "telegram:addis_news/2" });
+      FakeObserver.instances[0]?.emit(0.9);
+      jest.advanceTimersByTime(1000);
+      sdk.trackLinkClick?.(item);
+      warn.mockClear();
+      sdk.trackLinkClick?.({ externalRef: "SECRET a b" });
+      sdk.trackLinkClick?.({ id: ID, externalRef: "telegram:addis_news/3" });
+      sdk.trackLinkClick?.({});
+      jest.advanceTimersByTime(5000);
+      const events = beacons.flatMap((b) => (JSON.parse(b.body) as { events: Record<string, unknown>[] }).events);
+      expect(events.map((e) => [e.kind, e.item_id, e.external_ref, e.placement_id])).toEqual([
+        ["link_click", undefined, "telegram:addis_news/1", "telegram"],
+        ["view", undefined, "telegram:addis_news/2", undefined],
+        ["link_click", ID, undefined, undefined],
+      ]);
+      expect(warn).toHaveBeenCalledTimes(3);
+      for (const call of warn.mock.calls) expect(String(call[0])).not.toMatch(/SECRET|addis_news/);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("makes no session of its own: a whole lifecycle reads and writes no storage, cookie or random source (spec 005)", () => {
     const touched: string[] = [];
     const spies: { mockRestore: () => void }[] = [
